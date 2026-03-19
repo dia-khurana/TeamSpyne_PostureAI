@@ -11,7 +11,7 @@ const queryClient = new QueryClient();
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
+      <Route path="/app" component={Dashboard} />
       <Route path="/mobile" component={MobileCam} />
       <Route component={NotFound} />
     </Switch>

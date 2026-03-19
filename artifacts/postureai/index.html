@@ -1,23 +1,381 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <title>PostureAI — Your personal posture coach</title>
-    <meta name="description" content="Real-time posture tracking using your webcam. Stay comfortable, recover faster." />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <!-- MediaPipe via CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PostureAI — Your spine is talking. Are you listening?</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet" />
+    <style>
+      *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+      :root{--cream:#f7f4ef;--cream2:#ede9e1;--cream3:#e0d9ce;--ink:#1c1917;--ink2:#3d3834;--ink3:#6b645c;--sage:#4a7c6f;--sage-l:#6a9e8f;--sage-xl:#c8ddd8;--sage-bg:#ebf3f0;--amber:#b5743a;--amber-bg:#fbf3e8;--rose:#8b4d4d;--border:rgba(28,25,23,0.1);--border2:rgba(28,25,23,0.06);--shadow:0 2px 24px rgba(28,25,23,0.08);--shadow-lg:0 8px 64px rgba(28,25,23,0.12);--serif:"Playfair Display",Georgia,serif;--sans:"DM Sans",system-ui,sans-serif;--mono:"DM Mono","Courier New",monospace;--max:1180px;--nav-h:68px}
+      html{scroll-behavior:smooth}
+      body{background:var(--cream);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+      .cursor{width:36px;height:36px;border:1.5px solid var(--sage);border-radius:50%;position:fixed;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);transition:transform 0.08s,opacity 0.2s;mix-blend-mode:multiply}
+      .cursor-dot{width:5px;height:5px;background:var(--sage);border-radius:50%;position:fixed;pointer-events:none;z-index:9999;transform:translate(-50%,-50%)}
+      nav{position:fixed;top:0;left:0;right:0;height:var(--nav-h);background:rgba(247,244,239,0.88);backdrop-filter:blur(20px);border-bottom:1px solid transparent;z-index:100;transition:border-color 0.3s,background 0.3s}
+      nav.scrolled{border-bottom-color:var(--border);background:rgba(247,244,239,0.96)}
+      .nav-inner{max-width:var(--max);margin:0 auto;padding:0 32px;height:100%;display:flex;align-items:center;justify-content:space-between}
+      .nav-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+      .nav-logo-mark{width:34px;height:34px;background:var(--ink);border-radius:9px;display:flex;align-items:center;justify-content:center}
+      .nav-logo-mark svg{display:block}
+      .nav-logo-name{font-family:var(--serif);font-size:18px;font-weight:600;color:var(--ink);letter-spacing:-0.01em}
+      .nav-links{display:flex;align-items:center;gap:32px;list-style:none}
+      .nav-links a{font-size:14px;font-weight:400;color:var(--ink3);text-decoration:none;transition:color 0.2s;letter-spacing:0.01em}
+      .nav-links a:hover{color:var(--ink)}
+      .nav-right{display:flex;align-items:center;gap:12px}
+      .btn-ghost{font-size:14px;font-weight:400;color:var(--ink2);background:none;border:1px solid var(--border);border-radius:100px;padding:8px 20px;cursor:pointer;transition:all 0.2s;text-decoration:none;display:inline-flex;align-items:center}
+      .btn-ghost:hover{border-color:var(--ink3);color:var(--ink)}
+      .btn-primary{font-size:14px;font-weight:500;background:var(--ink);color:var(--cream);border:none;border-radius:100px;padding:9px 22px;cursor:pointer;transition:all 0.2s;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+      .btn-primary:hover{background:var(--ink2);transform:translateY(-1px)}
+      .btn-primary svg{width:14px;height:14px}
+      .hero{min-height:100vh;padding-top:var(--nav-h);display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:0;max-width:var(--max);margin:0 auto;padding-left:32px;padding-right:32px}
+      .hero-left{padding:80px 60px 80px 0}
+      .hero-badge{display:inline-flex;align-items:center;gap:8px;background:var(--sage-bg);border:1px solid var(--sage-xl);border-radius:100px;padding:6px 14px;font-size:12px;font-weight:500;color:var(--sage);font-family:var(--mono);letter-spacing:0.04em;margin-bottom:32px}
+      .badge-dot{width:6px;height:6px;border-radius:50%;background:var(--sage);animation:pulse 2s infinite}
+      @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(1.4)}}
+      .hero h1{font-family:var(--serif);font-size:clamp(42px,5vw,68px);line-height:1.07;letter-spacing:-0.02em;color:var(--ink);margin-bottom:24px}
+      .hero h1 em{font-style:italic;color:var(--sage)}
+      .hero-sub{font-size:17px;font-weight:300;color:var(--ink3);line-height:1.7;max-width:420px;margin-bottom:40px}
+      .hero-typewriter{font-size:13px;font-family:var(--mono);color:var(--sage);min-height:18px;margin-bottom:40px;display:flex;align-items:center;gap:8px}
+      .tw-cursor{animation:blink 1s infinite}
+      @keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0}}
+      .hero-actions{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+      .btn-download{font-size:15px;font-weight:500;background:var(--ink);color:var(--cream);border:none;border-radius:12px;padding:14px 28px;cursor:pointer;transition:all 0.25s;text-decoration:none;display:inline-flex;align-items:center;gap:10px;box-shadow:0 4px 20px rgba(28,25,23,0.2)}
+      .btn-download:hover{background:var(--sage);transform:translateY(-2px);box-shadow:0 8px 32px rgba(74,124,111,0.3)}
+      .btn-how{font-size:14px;font-weight:400;color:var(--ink2);background:none;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;transition:color 0.2s;padding:14px 0}
+      .btn-how:hover{color:var(--sage)}
+      .btn-how-icon{width:36px;height:36px;border-radius:50%;background:var(--cream2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;transition:all 0.2s}
+      .btn-how:hover .btn-how-icon{background:var(--sage-bg);border-color:var(--sage-xl)}
+      .hero-trust{margin-top:48px;display:flex;align-items:center;gap:24px;padding-top:48px;border-top:1px solid var(--border2)}
+      .trust-num{font-family:var(--serif);font-size:26px;font-weight:600;color:var(--ink);line-height:1}
+      .trust-label{font-size:11px;color:var(--ink3);font-family:var(--mono);letter-spacing:0.04em;margin-top:3px}
+      .trust-divider{width:1px;height:36px;background:var(--border)}
+      .hero-right{position:relative;display:flex;align-items:center;justify-content:center;padding:60px 0}
+      .sim-card{background:white;border:1px solid var(--border);border-radius:24px;padding:28px;width:340px;box-shadow:var(--shadow-lg);position:relative;overflow:hidden}
+      .sim-card::before{content:"";position:absolute;inset:0;background:radial-gradient(circle at 70% 30%,rgba(74,124,111,0.06) 0%,transparent 60%);pointer-events:none}
+      .sim-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+      .sim-title{font-family:var(--mono);font-size:10px;letter-spacing:0.1em;color:var(--ink3);text-transform:uppercase}
+      .sim-live{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10px;color:var(--sage)}
+      .sim-live-dot{width:5px;height:5px;border-radius:50%;background:var(--sage);animation:pulse 1.5s infinite}
+      .sim-canvas-wrap{background:var(--cream);border-radius:14px;height:200px;margin-bottom:20px;position:relative;overflow:hidden;border:1px solid var(--border2)}
+      #simCanvas{width:100%;height:100%;display:block}
+      .sim-score-row{display:flex;align-items:center;gap:16px;margin-bottom:16px}
+      .sim-ring-wrap{position:relative;flex-shrink:0}
+      .sim-ring-bg{fill:none;stroke:var(--cream2);stroke-width:4}
+      .sim-ring-fill{fill:none;stroke:var(--sage);stroke-width:4;stroke-linecap:round;stroke-dasharray:188;stroke-dashoffset:30;transform:rotate(-90deg);transform-origin:30px 30px;transition:stroke-dashoffset 1s ease,stroke 0.5s ease}
+      .sim-score-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+      .sim-score-num{font-family:var(--serif);font-size:18px;font-weight:600;color:var(--ink);line-height:1}
+      .sim-score-lbl{font-family:var(--mono);font-size:8px;color:var(--ink3);letter-spacing:0.06em}
+      .sim-status{font-family:var(--serif);font-size:14px;color:var(--ink);font-style:italic}
+      .sim-status-sub{font-size:11px;color:var(--ink3);margin-top:2px;font-family:var(--mono)}
+      .sim-metrics{display:flex;flex-direction:column;gap:8px}
+      .sim-metric{display:flex;align-items:center;gap:8px}
+      .sim-m-label{font-family:var(--mono);font-size:10px;color:var(--ink3);width:62px;flex-shrink:0;letter-spacing:0.02em}
+      .sim-m-bar-wrap{flex:1;height:3px;background:var(--cream2);border-radius:100px;overflow:hidden}
+      .sim-m-bar{height:100%;border-radius:100px;background:var(--sage);transition:width 0.8s ease,background 0.5s ease}
+      .sim-m-bar.warn{background:var(--amber)}.sim-m-bar.bad{background:var(--rose)}
+      .sim-m-val{font-family:var(--mono);font-size:11px;font-weight:400;color:var(--sage);width:28px;text-align:right;transition:color 0.4s}
+      .sim-m-val.warn{color:var(--amber)}.sim-m-val.bad{color:var(--rose)}
+      .float-chip{position:absolute;background:white;border:1px solid var(--border);border-radius:12px;padding:10px 14px;box-shadow:var(--shadow);font-size:11px;animation:float 4s ease-in-out infinite}
+      .float-chip-1{top:20%;right:-20px;animation-delay:0s}.float-chip-2{bottom:25%;left:-24px;animation-delay:1.5s}
+      @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+      .chip-label{font-family:var(--mono);font-size:9px;color:var(--ink3);letter-spacing:0.06em;text-transform:uppercase}
+      .chip-val{font-family:var(--serif);font-size:18px;color:var(--ink);font-weight:600;line-height:1.2}
+      .chip-val.good{color:var(--sage)}.chip-val.warn{color:var(--amber)}
+      section{padding:96px 32px;max-width:var(--max);margin:0 auto}
+      .section-tag{font-family:var(--mono);font-size:11px;letter-spacing:0.12em;color:var(--sage);text-transform:uppercase;margin-bottom:16px;display:flex;align-items:center;gap:10px}
+      .section-tag::before{content:"";width:24px;height:1px;background:var(--sage)}
+      .section-title{font-family:var(--serif);font-size:clamp(32px,4vw,52px);font-weight:600;line-height:1.1;letter-spacing:-0.02em;color:var(--ink);max-width:640px;margin-bottom:20px}
+      .section-title em{font-style:italic;color:var(--sage)}
+      .section-sub{font-size:17px;font-weight:300;color:var(--ink3);line-height:1.7;max-width:560px;margin-bottom:64px}
+      .how-section{background:white;padding:96px 0;border-top:1px solid var(--border2);border-bottom:1px solid var(--border2)}
+      .how-inner{max-width:var(--max);margin:0 auto;padding:0 32px}
+      .how-steps{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;background:var(--border2);border-radius:20px;overflow:hidden;margin-top:64px;border:1px solid var(--border)}
+      .how-step{background:white;padding:40px 32px;position:relative;transition:background 0.2s}
+      .how-step:hover{background:var(--cream)}
+      .step-num{font-family:var(--serif);font-size:48px;font-weight:400;color:var(--sage-xl);line-height:1;margin-bottom:24px}
+      .step-icon{width:44px;height:44px;border-radius:12px;background:var(--sage-bg);border:1px solid var(--sage-xl);display:flex;align-items:center;justify-content:center;margin-bottom:16px}
+      .step-icon svg{width:20px;height:20px;color:var(--sage)}
+      .step-title{font-family:var(--serif);font-size:20px;font-weight:600;color:var(--ink);margin-bottom:10px}
+      .step-desc{font-size:14px;color:var(--ink3);line-height:1.65}
+      .feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border2);border:1px solid var(--border);border-radius:20px;overflow:hidden}
+      .feat-card{background:white;padding:36px;transition:background 0.2s}
+      .feat-card:hover{background:var(--cream)}.feat-card.wide{grid-column:span 2}
+      .feat-icon{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;margin-bottom:20px;border:1px solid var(--border)}
+      .feat-icon.sage-bg{background:var(--sage-bg);border-color:var(--sage-xl)}.feat-icon.amber-bg{background:var(--amber-bg);border-color:rgba(181,116,58,0.2)}.feat-icon.cream-bg{background:var(--cream2)}
+      .feat-card h3{font-family:var(--serif);font-size:22px;font-weight:600;color:var(--ink);margin-bottom:10px;letter-spacing:-0.01em}
+      .feat-card p{font-size:14px;color:var(--ink3);line-height:1.7}
+      .feat-tag{display:inline-block;margin-top:16px;font-family:var(--mono);font-size:10px;letter-spacing:0.08em;color:var(--sage);background:var(--sage-bg);border:1px solid var(--sage-xl);padding:3px 10px;border-radius:100px}
+      .ext-section{background:var(--ink);padding:96px 0}
+      .ext-inner{max-width:var(--max);margin:0 auto;padding:0 32px;display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center}
+      .ext-left .section-tag{color:var(--sage-l)}.ext-left .section-tag::before{background:var(--sage-l)}
+      .ext-left .section-title{color:var(--cream);max-width:480px}.ext-left .section-sub{color:rgba(237,233,225,0.55);margin-bottom:40px}
+      .ext-steps{display:flex;flex-direction:column;gap:20px;margin-bottom:40px}
+      .ext-step{display:flex;align-items:flex-start;gap:16px}
+      .ext-step-num{width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;color:var(--sage-l);flex-shrink:0}
+      .ext-step-text{font-size:14px;color:rgba(237,233,225,0.65);line-height:1.5;padding-top:4px}
+      .ext-step-text strong{color:var(--cream);font-weight:500}
+      .btn-ext{display:inline-flex;align-items:center;gap:10px;background:var(--sage);color:white;border:none;border-radius:12px;padding:14px 28px;font-size:15px;font-weight:500;cursor:pointer;transition:all 0.25s;text-decoration:none;box-shadow:0 4px 20px rgba(74,124,111,0.4)}
+      .btn-ext:hover{background:var(--sage-l);transform:translateY(-2px)}
+      .ext-right{display:flex;justify-content:center;align-items:center}
+      .ext-popup-preview{background:#0d0d12;border:1px solid rgba(255,255,255,0.1);border-radius:20px;width:280px;overflow:hidden;box-shadow:0 20px 80px rgba(0,0,0,0.5)}
+      .ext-popup-header{background:rgba(255,255,255,0.04);border-bottom:1px solid rgba(255,255,255,0.06);padding:14px 18px;display:flex;align-items:center;justify-content:space-between}
+      .ext-popup-logo{display:flex;align-items:center;gap:8px;font-family:var(--serif);font-size:14px;color:var(--cream)}
+      .ext-popup-dot{width:6px;height:6px;border-radius:50%;background:var(--sage-l);animation:pulse 2s infinite}
+      .ext-popup-body{padding:18px}
+      .ext-mini-ring{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+      .ext-score-big{font-family:var(--serif);font-size:32px;font-weight:600;color:var(--cream)}
+      .ext-score-lbl{font-family:var(--mono);font-size:10px;color:rgba(237,233,225,0.4);letter-spacing:0.06em}
+      .ext-score-status{font-size:13px;color:var(--sage-l);font-style:italic;font-family:var(--serif)}
+      .ext-mini-metrics{display:flex;flex-direction:column;gap:6px}
+      .ext-mini-m{display:flex;align-items:center;gap:8px}
+      .ext-mini-label{font-family:var(--mono);font-size:9px;color:rgba(237,233,225,0.35);width:52px}
+      .ext-mini-bar-wrap{flex:1;height:2px;background:rgba(255,255,255,0.06);border-radius:100px;overflow:hidden}
+      .ext-mini-bar{height:100%;border-radius:100px;background:var(--sage-l)}
+      .ext-mini-val{font-family:var(--mono);font-size:9px;color:var(--sage-l);width:22px;text-align:right}
+      .sci-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:32px;margin-top:64px}
+      .sci-card{padding:32px;border:1px solid var(--border);border-radius:18px;background:white;transition:all 0.25s}
+      .sci-card:hover{transform:translateY(-4px);box-shadow:var(--shadow)}
+      .sci-num{font-family:var(--serif);font-size:52px;font-weight:600;color:var(--sage);line-height:1;margin-bottom:8px}
+      .sci-unit{font-size:20px}.sci-title{font-size:15px;font-weight:500;color:var(--ink);margin-bottom:8px}
+      .sci-desc{font-size:13px;color:var(--ink3);line-height:1.65}
+      footer{background:var(--cream2);border-top:1px solid var(--border);padding:48px 32px}
+      .footer-inner{max-width:var(--max);margin:0 auto;display:flex;align-items:center;justify-content:space-between}
+      .footer-logo{font-family:var(--serif);font-size:20px;font-weight:600;color:var(--ink)}
+      .footer-links{display:flex;gap:32px;list-style:none}
+      .footer-links a{font-size:13px;color:var(--ink3);text-decoration:none;transition:color 0.2s}
+      .footer-links a:hover{color:var(--sage)}
+      .footer-copy{font-size:12px;color:var(--ink3);font-family:var(--mono)}
+      .anim-scroll{opacity:0;transform:translateY(24px);transition:opacity 0.7s ease,transform 0.7s ease}
+      .anim-scroll.vis{opacity:1;transform:translateY(0)}
+      .anim-scroll.delay-1{transition-delay:0.1s}.anim-scroll.delay-2{transition-delay:0.2s}.anim-scroll.delay-3{transition-delay:0.3s}
+      @media(max-width:900px){.hero{grid-template-columns:1fr;text-align:center}.hero-left{padding:60px 0 40px}.hero-sub{max-width:100%}.hero-actions{justify-content:center}.hero-right{display:none}.how-steps{grid-template-columns:repeat(2,1fr)}.feat-grid{grid-template-columns:1fr}.feat-card.wide{grid-column:span 1}.ext-inner{grid-template-columns:1fr;gap:48px}.ext-right{display:none}.sci-grid{grid-template-columns:1fr}.footer-inner{flex-direction:column;gap:24px;text-align:center}.footer-links{flex-wrap:wrap;justify-content:center}}
+    </style>
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-    <script src="/cv.js" defer></script>
-    <script src="/score.js" defer></script>
+    <div class="cursor" id="cursor"></div>
+    <div class="cursor-dot" id="cursorDot"></div>
+
+    <nav id="nav">
+      <div class="nav-inner">
+        <a href="#" class="nav-logo">
+          <div class="nav-logo-mark">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          </div>
+          <span class="nav-logo-name">PostureAI</span>
+        </a>
+        <ul class="nav-links">
+          <li><a href="#features">Features</a></li>
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#science">Science</a></li>
+          <li><a href="#extension">Extension</a></li>
+        </ul>
+        <div class="nav-right">
+          <!-- CHANGE 1: Sign in → Sign in / Sign up, links to /app -->
+          <a href="/app" class="btn-ghost">Sign in / Sign up</a>
+          <!-- CHANGE 2: Add to Chrome → Try Free, links to /app -->
+          <a href="/app" class="btn-primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            Try Free — No signup
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <div class="hero" id="home">
+      <div class="hero-left">
+        <div class="hero-badge">
+          <span class="badge-dot"></span>
+          Real-time · Private · Browser-only
+        </div>
+        <h1>Your spine<br/>is talking.<br/><em>Are you<br/>listening?</em></h1>
+        <p class="hero-sub">PostureAI watches your posture silently in the background. Zero uploads. Zero hardware. Just your existing webcam and a browser tab.</p>
+        <div class="hero-typewriter"><span id="typewriter"></span><span class="tw-cursor">|</span></div>
+        <div class="hero-actions">
+          <!-- CHANGE 3: Download Extension → Launch PostureAI Free, links to /app -->
+          <a href="/app" class="btn-download">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            Launch PostureAI Free
+          </a>
+          <a href="#how" class="btn-how">
+            <div class="btn-how-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </div>
+            How it works
+          </a>
+        </div>
+        <div class="hero-trust">
+          <div class="trust-stat"><div class="trust-num">33</div><div class="trust-label">BODY KEYPOINTS</div></div>
+          <div class="trust-divider"></div>
+          <div class="trust-stat"><div class="trust-num">30fps</div><div class="trust-label">LIVE TRACKING</div></div>
+          <div class="trust-divider"></div>
+          <div class="trust-stat"><div class="trust-num">0</div><div class="trust-label">DATA UPLOADED</div></div>
+        </div>
+      </div>
+
+      <div class="hero-right">
+        <div class="sim-card">
+          <div class="sim-header">
+            <span class="sim-title">Live Detection</span>
+            <span class="sim-live"><span class="sim-live-dot"></span>Tracking</span>
+          </div>
+          <div class="sim-canvas-wrap"><canvas id="simCanvas" width="284" height="200"></canvas></div>
+          <div class="sim-score-row">
+            <div class="sim-ring-wrap">
+              <svg width="60" height="60" viewBox="0 0 60 60">
+                <circle class="sim-ring-bg" cx="30" cy="30" r="27"/>
+                <circle class="sim-ring-fill" cx="30" cy="30" r="27" id="simRing"/>
+              </svg>
+              <div class="sim-score-center">
+                <span class="sim-score-num" id="simScore">84</span>
+                <span class="sim-score-lbl">SCORE</span>
+              </div>
+            </div>
+            <div>
+              <div class="sim-status" id="simStatus">Good posture</div>
+              <div class="sim-status-sub" id="simStatusSub">Keep it up</div>
+            </div>
+          </div>
+          <div class="sim-metrics">
+            <div class="sim-metric"><span class="sim-m-label">Neck tilt</span><div class="sim-m-bar-wrap"><div class="sim-m-bar" id="mNeck" style="width:18%"></div></div><span class="sim-m-val" id="vNeck">9°</span></div>
+            <div class="sim-metric"><span class="sim-m-label">Shoulder</span><div class="sim-m-bar-wrap"><div class="sim-m-bar" id="mShoulder" style="width:12%"></div></div><span class="sim-m-val" id="vShoulder">6°</span></div>
+            <div class="sim-metric"><span class="sim-m-label">Spine</span><div class="sim-m-bar-wrap"><div class="sim-m-bar" id="mSpine" style="width:8%"></div></div><span class="sim-m-val" id="vSpine">4°</span></div>
+          </div>
+        </div>
+        <div class="float-chip float-chip-1"><div class="chip-label">Neck tilt</div><div class="chip-val good" id="chipNeck">9°</div></div>
+        <div class="float-chip float-chip-2"><div class="chip-label">Alert</div><div class="chip-val" id="chipAlert">✓ Clear</div></div>
+      </div>
+    </div>
+
+    <div class="how-section" id="how">
+      <div class="how-inner">
+        <div class="section-tag anim-scroll">How it works</div>
+        <h2 class="section-title anim-scroll">From webcam to insight,<br/><em>in real time</em></h2>
+        <p class="section-sub anim-scroll">No installation beyond the extension. No account required. No data ever leaves your browser.</p>
+        <div class="how-steps">
+          <div class="how-step anim-scroll"><div class="step-num">01</div><div class="step-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3"/><path d="M20 21a8 8 0 10-16 0"/></svg></div><div class="step-title">Webcam captures you</div><div class="step-desc">Your existing laptop webcam is used. No special hardware, no extra setup. Camera permission is requested once.</div></div>
+          <div class="how-step anim-scroll delay-1"><div class="step-num">02</div><div class="step-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div><div class="step-title">AI maps your skeleton</div><div class="step-desc">MediaPipe Pose runs in-browser via WebAssembly, detecting 33 body landmarks at 30 frames per second. Zero cloud.</div></div>
+          <div class="how-step anim-scroll delay-2"><div class="step-num">03</div><div class="step-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg></div><div class="step-title">Angles are calculated</div><div class="step-desc">Neck tilt, shoulder alignment, and spine curvature are computed every frame using precise trigonometric angle math.</div></div>
+          <div class="how-step anim-scroll delay-3"><div class="step-num">04</div><div class="step-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg></div><div class="step-title">You're alerted precisely</div><div class="step-desc">A specific alert fires after 90 seconds of sustained bad posture — not a generic reminder, but the exact metric that broke.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <section id="features">
+      <div class="section-tag anim-scroll">Features</div>
+      <h2 class="section-title anim-scroll">Built for people who<br/><em>actually work all day</em></h2>
+      <p class="section-sub anim-scroll">Every decision was made for the person who can't afford to stop and think about their posture — so PostureAI thinks for them.</p>
+      <div class="feat-grid">
+        <div class="feat-card wide anim-scroll"><div class="feat-icon sage-bg"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A7C6F" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></div><h3>Real-time posture scoring</h3><p>A single live 0–100 score computed every frame from three weighted metrics: neck tilt (35%), shoulder alignment (30%), and spine curvature (35%). The score updates as you move, giving you instant feedback rather than post-session summaries.</p><span class="feat-tag">30 FPS · No lag</span></div>
+        <div class="feat-card anim-scroll"><div class="feat-icon sage-bg"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A7C6F" stroke-width="1.8"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div><h3>Complete privacy</h3><p>MediaPipe runs via WebAssembly in your browser tab. No server, no API, no video upload. Architecturally impossible to leak — not just a policy.</p><span class="feat-tag">Zero upload</span></div>
+        <div class="feat-card anim-scroll delay-1"><div class="feat-icon amber-bg"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#B5743A" stroke-width="1.8"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg></div><h3>Precise alerts</h3><p>Alerts name the exact problem: "Chin tuck — your head is too far forward." Not a generic nudge. Fires at 90 seconds, not 8 minutes.</p><span class="feat-tag">Specific · Fast</span></div>
+        <div class="feat-card anim-scroll delay-2"><div class="feat-icon cream-bg"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3D3834" stroke-width="1.8"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div><h3>Session history</h3><p>Your posture scores are stored in IndexedDB locally. 7-day trend charts show whether you're improving. No account required.</p></div>
+        <div class="feat-card anim-scroll delay-3"><div class="feat-icon sage-bg"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4A7C6F" stroke-width="1.8"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><path d="M8 21h8M12 17v4"/></svg></div><h3>Works anywhere</h3><p>A Chrome extension that floats a score widget on any tab, silently tracking while you work, browse, or write.</p></div>
+      </div>
+    </section>
+
+    <div style="background:white;border-top:1px solid var(--border2);border-bottom:1px solid var(--border2)">
+      <section id="science">
+        <div class="section-tag anim-scroll">Science</div>
+        <h2 class="section-title anim-scroll">The numbers that<br/><em>matter</em></h2>
+        <div class="sci-grid">
+          <div class="sci-card anim-scroll"><div class="sci-num">80<span class="sci-unit">%</span></div><div class="sci-title">of desk workers develop chronic neck or back pain</div><div class="sci-desc">Not from accidents — from hours of undetected bad posture with no feedback mechanism.</div></div>
+          <div class="sci-card anim-scroll delay-1"><div class="sci-num">4<span class="sci-unit">×</span></div><div class="sci-title">more spinal load per inch of forward head position</div><div class="sci-desc">At 3 inches forward — typical at a laptop — that's an effective 42 lbs of extra weight on your cervical spine.</div></div>
+          <div class="sci-card anim-scroll delay-2"><div class="sci-num">90<span class="sci-unit">s</span></div><div class="sci-title">is when PostureAI alerts you — not 8 minutes</div><div class="sci-desc">Muscle fatigue sets in within minutes. Early intervention prevents the cycle: fatigue → tightness → inflammation → damage.</div></div>
+        </div>
+      </section>
+    </div>
+
+    <div class="ext-section" id="extension">
+      <div class="ext-inner">
+        <div class="ext-left">
+          <div class="section-tag anim-scroll">Launch App</div>
+          <h2 class="section-title anim-scroll">Start in seconds.<br/><em>No signup needed.</em></h2>
+          <p class="section-sub anim-scroll">PostureAI runs entirely in your browser. Allow camera once and you're tracking. No account, no download, no extension required.</p>
+          <div class="ext-steps">
+            <div class="ext-step anim-scroll"><div class="ext-step-num">1</div><div class="ext-step-text"><strong>Click Launch App Free</strong> below — opens instantly in a new tab.</div></div>
+            <div class="ext-step anim-scroll delay-1"><div class="ext-step-num">2</div><div class="ext-step-text"><strong>Allow camera access</strong> when prompted — nothing is recorded or uploaded.</div></div>
+            <div class="ext-step anim-scroll delay-2"><div class="ext-step-num">3</div><div class="ext-step-text"><strong>Sit naturally</strong> and let PostureAI score your posture in real time.</div></div>
+          </div>
+          <!-- CHANGE 4: Download Extension Free → Launch App Free, links to /app -->
+          <a href="/app" class="btn-ext anim-scroll">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            Launch App Free
+          </a>
+        </div>
+        <div class="ext-right">
+          <div class="ext-popup-preview">
+            <div class="ext-popup-header">
+              <div class="ext-popup-logo"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4A7C6F" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>PostureAI</div>
+              <div style="display:flex;align-items:center;gap:6px"><div class="ext-popup-dot"></div><span style="font-family:var(--mono);font-size:9px;color:rgba(237,233,225,0.35)">Live</span></div>
+            </div>
+            <div class="ext-popup-body">
+              <div class="ext-mini-ring">
+                <div><div class="ext-score-big">84</div><div class="ext-score-lbl">POSTURE SCORE</div></div>
+                <div><div class="ext-score-status">Good posture</div><div style="font-size:11px;color:rgba(237,233,225,0.3);font-family:var(--mono);margin-top:2px">Keep it up</div></div>
+              </div>
+              <div class="ext-mini-metrics">
+                <div class="ext-mini-m"><span class="ext-mini-label">Neck</span><div class="ext-mini-bar-wrap"><div class="ext-mini-bar" style="width:20%"></div></div><span class="ext-mini-val">9°</span></div>
+                <div class="ext-mini-m"><span class="ext-mini-label">Shoulder</span><div class="ext-mini-bar-wrap"><div class="ext-mini-bar" style="width:15%"></div></div><span class="ext-mini-val">6°</span></div>
+                <div class="ext-mini-m"><span class="ext-mini-label">Spine</span><div class="ext-mini-bar-wrap"><div class="ext-mini-bar" style="width:10%"></div></div><span class="ext-mini-val">4°</span></div>
+              </div>
+              <div style="margin-top:14px;padding:10px;background:rgba(74,124,111,0.08);border:1px solid rgba(74,124,111,0.15);border-radius:10px">
+                <div style="font-family:var(--mono);font-size:9px;color:var(--sage-l);letter-spacing:0.06em;margin-bottom:4px">7-DAY TREND</div>
+                <div style="display:flex;align-items:flex-end;gap:4px;height:32px">
+                  <div style="flex:1;background:rgba(106,158,143,0.4);border-radius:3px 3px 0 0;height:60%"></div>
+                  <div style="flex:1;background:rgba(106,158,143,0.5);border-radius:3px 3px 0 0;height:75%"></div>
+                  <div style="flex:1;background:rgba(181,116,58,0.4);border-radius:3px 3px 0 0;height:50%"></div>
+                  <div style="flex:1;background:rgba(106,158,143,0.4);border-radius:3px 3px 0 0;height:65%"></div>
+                  <div style="flex:1;background:rgba(106,158,143,0.6);border-radius:3px 3px 0 0;height:80%"></div>
+                  <div style="flex:1;background:rgba(106,158,143,0.5);border-radius:3px 3px 0 0;height:70%"></div>
+                  <div style="flex:1;background:rgba(74,124,111,0.8);border-radius:3px 3px 0 0;height:85%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <div class="footer-inner">
+        <div class="footer-logo">PostureAI</div>
+        <ul class="footer-links">
+          <li><a href="#features">Features</a></li>
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#science">Science</a></li>
+          <li><a href="#extension">Extension</a></li>
+          <li><a href="#">Privacy</a></li>
+        </ul>
+        <div class="footer-copy">© 2026 PostureAI · Zero data collected</div>
+      </div>
+    </footer>
+
+    <script>
+      const cursor=document.getElementById("cursor"),cursorDot=document.getElementById("cursorDot");
+      let mx=0,my=0,cx=0,cy=0;
+      document.addEventListener("mousemove",e=>{mx=e.clientX;my=e.clientY;cursorDot.style.left=mx+"px";cursorDot.style.top=my+"px";});
+      (function animCursor(){cx+=(mx-cx)*0.1;cy+=(my-cy)*0.1;cursor.style.left=cx+"px";cursor.style.top=cy+"px";requestAnimationFrame(animCursor);})();
+      window.addEventListener("scroll",()=>{document.getElementById("nav").classList.toggle("scrolled",window.scrollY>60);});
+      const lines=["Detects neck tilt before you feel the pain.","Zero upload. Zero hardware. Just a browser tab.","Alerts at 90 seconds — not 8 minutes.","80% of desk workers develop chronic back pain.","Your posture score. Live. Private. Free."];
+      let li=0,ci=0,del=false;
+      const tw=document.getElementById("typewriter");
+      function twTick(){const line=lines[li];if(!del){tw.textContent=line.slice(0,++ci);if(ci===line.length){del=true;setTimeout(twTick,2400);return;}setTimeout(twTick,38);}else{tw.textContent=line.slice(0,--ci);if(ci===0){del=false;li=(li+1)%lines.length;setTimeout(twTick,400);return;}setTimeout(twTick,18);}}
+      setTimeout(twTick,800);
+      const obs=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting)e.target.classList.add("vis");});},{threshold:0.08});
+      document.querySelectorAll(".anim-scroll").forEach(el=>obs.observe(el));
+      const canvas=document.getElementById("simCanvas"),ctx=canvas.getContext("2d");
+      const BASE={nose:{x:0.5,y:0.12},lEar:{x:0.38,y:0.18},rEar:{x:0.62,y:0.18},lSho:{x:0.28,y:0.42},rSho:{x:0.72,y:0.42},lHip:{x:0.32,y:0.78},rHip:{x:0.68,y:0.78}};
+      const STATES=[{name:"Good posture",sub:"Keep it up",score:84,neck:9,sh:6,sp:4,forwardHead:0,shoulderDrop:0},{name:"Mild neck tilt",sub:"Adjust your head position",score:68,neck:18,sh:8,sp:7,forwardHead:0.04,shoulderDrop:0},{name:"Poor posture",sub:"Chin tuck — sit up now",score:42,neck:28,sh:14,sp:16,forwardHead:0.09,shoulderDrop:0.05},{name:"Shoulder uneven",sub:"Level your shoulders",score:61,neck:12,sh:18,sp:8,forwardHead:0.02,shoulderDrop:0.08},{name:"Good posture",sub:"Great alignment",score:91,neck:7,sh:3,sp:3,forwardHead:0,shoulderDrop:0}];
+      let stateIdx=0,progress=0,lastTime=0,prevState=STATES[0],nextState=STATES[0];
+      function lerpState(a,b,t){const ease=t<0.5?2*t*t:-1+(4-2*t)*t;return{score:Math.round(a.score+(b.score-a.score)*ease),neck:Math.round(a.neck+(b.neck-a.neck)*ease),sh:Math.round(a.sh+(b.sh-a.sh)*ease),sp:Math.round(a.sp+(b.sp-a.sp)*ease),forwardHead:a.forwardHead+(b.forwardHead-a.forwardHead)*ease,shoulderDrop:a.shoulderDrop+(b.shoulderDrop-a.shoulderDrop)*ease,name:t<0.5?a.name:b.name,sub:t<0.5?a.sub:b.sub};}
+      function drawSimulation(state){const W=canvas.width,H=canvas.height;ctx.clearRect(0,0,W,H);ctx.save();ctx.strokeStyle="rgba(28,25,23,0.04)";ctx.lineWidth=1;for(let x=0;x<=W;x+=24){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}for(let y=0;y<=H;y+=24){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}ctx.restore();const lm={nose:{x:BASE.nose.x,y:BASE.nose.y-state.forwardHead*0.5},lEar:{x:BASE.lEar.x+state.forwardHead*0.5,y:BASE.lEar.y-state.forwardHead*0.3},rEar:{x:BASE.rEar.x-state.forwardHead*0.5,y:BASE.rEar.y-state.forwardHead*0.3},lSho:{x:BASE.lSho.x+state.forwardHead*0.2,y:BASE.lSho.y+state.shoulderDrop*0.5},rSho:{x:BASE.rSho.x-state.forwardHead*0.2,y:BASE.rSho.y-state.shoulderDrop*0.5},lHip:{x:BASE.lHip.x,y:BASE.lHip.y},rHip:{x:BASE.rHip.x,y:BASE.rHip.y}};const s=state.score;const color=s>=80?"#4A7C6F":s>=60?"#B5743A":"#8B4D4D";function pt(key){return{x:lm[key].x*W,y:lm[key].y*H};}const bones=[["lEar","lSho"],["rEar","rSho"],["lSho","rSho"],["lSho","lHip"],["rSho","rHip"],["lHip","rHip"]];ctx.lineWidth=2.5;ctx.strokeStyle=color;ctx.globalAlpha=0.8;bones.forEach(([a,b])=>{const pa=pt(a),pb=pt(b);ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(pb.x,pb.y);ctx.stroke();});ctx.globalAlpha=0.15;ctx.fillStyle=color;const nose=pt("nose");ctx.beginPath();ctx.arc(nose.x,nose.y,22,0,Math.PI*2);ctx.fill();ctx.globalAlpha=0.6;ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(nose.x,nose.y,22,0,Math.PI*2);ctx.stroke();ctx.globalAlpha=1;ctx.fillStyle=color;["lEar","rEar","lSho","rSho","lHip","rHip"].forEach(key=>{const p=pt(key);ctx.beginPath();ctx.arc(p.x,p.y,4.5,0,Math.PI*2);ctx.fill();});const midShoX=(pt("lSho").x+pt("rSho").x)/2,midShoY=(pt("lSho").y+pt("rSho").y)/2,midEarY=(pt("lEar").y+pt("rEar").y)/2;ctx.save();ctx.strokeStyle="rgba(74,124,111,0.3)";ctx.lineWidth=1;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(midShoX,midShoY);ctx.lineTo(midShoX,midEarY-30);ctx.stroke();ctx.setLineDash([]);ctx.restore();ctx.globalAlpha=1;}
+      function updateSimUI(state){const ring=document.getElementById("simRing");const offset=188-(188*state.score)/100;const color=state.score>=80?"#4A7C6F":state.score>=60?"#B5743A":"#8B4D4D";ring.style.strokeDashoffset=offset;ring.style.stroke=color;document.getElementById("simScore").textContent=state.score;document.getElementById("simStatus").textContent=state.name;document.getElementById("simStatusSub").textContent=state.sub;function setMetric(barId,valId,val,warnT,badT){const bar=document.getElementById(barId),valEl=document.getElementById(valId);const pct=Math.min(100,Math.round((val/40)*100));bar.style.width=pct+"%";bar.className="sim-m-bar"+(val>=badT?" bad":val>=warnT?" warn":"");valEl.textContent=val+"°";valEl.className="sim-m-val"+(val>=badT?" bad":val>=warnT?" warn":"");}setMetric("mNeck","vNeck",state.neck,15,25);setMetric("mShoulder","vShoulder",state.sh,10,18);setMetric("mSpine","vSpine",state.sp,10,18);document.getElementById("chipNeck").textContent=state.neck+"°";document.getElementById("chipNeck").className="chip-val"+(state.neck>20?" warn":" good");document.getElementById("chipAlert").textContent=state.score>=80?"✓ Clear":"⚠ Adjust";document.getElementById("chipAlert").className="chip-val"+(state.score<80?" warn":"");}
+      let holdTimer=0;const HOLD_DURATION=2000,TRANSITION_DURATION=1500;
+      function simTick(timestamp){if(!lastTime)lastTime=timestamp;const dt=timestamp-lastTime;lastTime=timestamp;if(progress>=1){holdTimer+=dt;if(holdTimer>=HOLD_DURATION){holdTimer=0;progress=0;prevState=nextState;stateIdx=(stateIdx+1)%STATES.length;nextState=STATES[stateIdx];}drawSimulation(nextState);updateSimUI(nextState);}else{progress=Math.min(1,progress+dt/TRANSITION_DURATION);const cur=lerpState(prevState,nextState,progress);drawSimulation(cur);updateSimUI(cur);}requestAnimationFrame(simTick);}
+      nextState=STATES[0];requestAnimationFrame(simTick);
+    </script>
   </body>
 </html>
