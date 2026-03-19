@@ -50,6 +50,18 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 
 ## Packages
 
+### `artifacts/postureai` (`@workspace/postureai`)
+
+React + Vite PostureAI web app. Real-time posture detection using MediaPipe Pose via CDN.
+
+- **Entry**: `src/main.tsx` → `src/App.tsx` → `src/pages/Dashboard.tsx`
+- **CV Pipeline**: `public/cv.js` — MediaPipe Pose detection, dispatches `posture-tick` CustomEvents with `{detected, composite, color, status, neckTilt, shoulderAlign, spineTilt}`
+- **Components**: `src/components/ScoreRing.tsx`, `src/components/HistoryChart.tsx`
+- **No backend**: Sessions stored in localStorage (`postureai_sessions`)
+- **Key features**: slouch duration tracking (8 min relaxed / 2 min focus), rolling 5-min average score, away detection, session summary modal, break reminders, first-run welcome banner, mode toggle, session history chart
+- Camera is NOT mirrored (no scale-x transform on video or canvas)
+- `pnpm --filter @workspace/postureai run dev` — dev server on port 24993
+
 ### `artifacts/api-server` (`@workspace/api-server`)
 
 Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` for request and response validation and `@workspace/db` for persistence.
