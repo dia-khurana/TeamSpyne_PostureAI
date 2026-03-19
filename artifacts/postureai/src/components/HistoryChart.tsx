@@ -1,102 +1,139 @@
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Cell } from "recharts";
 import { format } from "date-fns";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { useMemo } from "react";
+import type { Session } from "@/hooks/use-sessions";
 
-export interface SessionRecord {
-  id: string;
-  score: number;
-  goodPercent: number;
-  duration: number;
-  createdAt?: string | number;
-  timestamp?: string | number;
+interface Props {
+  data: Session[];
 }
 
-interface HistoryChartProps {
-  sessions: SessionRecord[];
-  loading?: boolean;
-}
+export function HistoryChart({ data }: Props) {
+  const gc = (s: number) => (s >= 80 ? "#10b981" : s >= 50 ? "#f59e0b" : "#ef4444");
 
-export default function HistoryChart({ sessions, loading }: HistoryChartProps) {
-  if (loading) {
+  const chartData = useMemo(
+    () =>
+      [...data]
+        .sort(
+          (a, b) =>
+            new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime()
+        )
+        .slice(-7)
+        .map((s) => ({
+          ...s,
+          displayDate:
+            s.createdAt && !isNaN(new Date(s.createdAt).getTime())
+              ? format(new Date(s.createdAt), "MMM d")
+              : s.timestamp && !isNaN(new Date(s.timestamp).getTime())
+                ? format(new Date(s.timestamp), "MMM d")
+                : "—",
+        })),
+    [data]
+  );
+
+  const hourly = useMemo(() => {
+    const h: Record<number, number[]> = {};
+    data.forEach((s) => {
+      const d = new Date(s.createdAt ?? s.timestamp ?? 0);
+      if (!isNaN(d.getTime())) {
+        const hr = d.getHours();
+        if (!h[hr]) h[hr] = [];
+        h[hr].push(s.avg);
+      }
+    });
+    return Object.entries(h)
+      .map(([hr, sc]) => ({
+        hour: parseInt(hr),
+        avg: Math.round(sc.reduce((a, b) => a + b, 0) / sc.length),
+      }))
+      .sort((a, b) => a.hour - b.hour);
+  }, [data]);
+
+  const worst =
+    hourly.length > 0 ? hourly.reduce((w, h) => (h.avg < w.avg ? h : w), hourly[0]) : null;
+
+  if (!data.length) {
     return (
-      <div className="flex items-center justify-center h-48 text-[#6b7280] text-xs tracking-widest">
-        Loading history...
+      <div className="text-center py-4">
+        <p className="text-xs text-[#9ca3af]">No sessions yet</p>
+        <p className="text-[10px] text-[#9ca3af] mt-1">Auto-saves every 60 seconds</p>
       </div>
     );
   }
-
-  if (!sessions || sessions.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-48 text-[#6b7280] text-xs tracking-widest">
-        No sessions recorded yet
-      </div>
-    );
-  }
-
-  const data = sessions.map((session) => {
-    const displayDate: string = session.createdAt
-      ? format(new Date(session.createdAt), "MMM dd HH:mm")
-      : (session as any).timestamp
-        ? format(new Date((session as any).timestamp), "MMM dd HH:mm")
-        : "No date";
-
-    return {
-      date: displayDate,
-      score: session.score,
-      goodPercent: session.goodPercent,
-      duration: Math.floor(session.duration / 60),
-    };
-  });
 
   return (
-    <ResponsiveContainer width="100%" height={180}>
-      <AreaChart data={data} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-        <defs>
-          <linearGradient id="scoreGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
-            <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e1e3a" />
-        <XAxis
-          dataKey="date"
-          tick={{ fill: "#4b5563", fontSize: 10 }}
-          axisLine={false}
-          tickLine={false}
-        />
-        <YAxis
-          domain={[0, 100]}
-          tick={{ fill: "#4b5563", fontSize: 10 }}
-          axisLine={false}
-          tickLine={false}
-        />
-        <Tooltip
-          contentStyle={{
-            background: "#111128",
-            border: "1px solid #2a2a4a",
-            borderRadius: 4,
-            fontSize: 11,
-            color: "#e2e8f0",
-          }}
-          labelStyle={{ color: "#a855f7", fontWeight: "bold" }}
-        />
-        <Area
-          type="monotone"
-          dataKey="score"
-          stroke="#a855f7"
-          strokeWidth={2}
-          fill="url(#scoreGrad)"
-          dot={{ fill: "#a855f7", r: 3 }}
-          activeDot={{ r: 5, fill: "#c084fc" }}
-        />
-      </AreaChart>
-    </ResponsiveContainer>
+    <div className="space-y-3">
+      <div className="h-[130px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData} margin={{ top: 4, right: 0, left: -28, bottom: 0 }}>
+            <XAxis
+              dataKey="displayDate"
+              stroke="#d1d5db"
+              fontSize={9}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              stroke="#d1d5db"
+              fontSize={9}
+              tickLine={false}
+              axisLine={false}
+              domain={[0, 100]}
+            />
+            <Tooltip
+              cursor={{ fill: "#f3f4f6" }}
+              content={({ active, payload }) => {
+                if (!active || !payload?.length) return null;
+                const d = payload[0].payload;
+                return (
+                  <div className="bg-white border border-[#e8eaed] rounded-lg p-2 shadow-sm text-xs">
+                    <p className="text-[#6b7280] mb-1">{d.displayDate}</p>
+                    <div className="flex gap-2">
+                      <span>
+                        Avg{" "}
+                        <strong style={{ color: gc(d.avg) }}>{d.avg}</strong>
+                      </span>
+                      {d.min !== undefined && (
+                        <span className="text-red-400">Min {d.min}</span>
+                      )}
+                      {d.max !== undefined && (
+                        <span className="text-emerald-500">Max {d.max}</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              }}
+            />
+            <Bar dataKey="avg" radius={[3, 3, 0, 0]}>
+              {chartData.map((e, i) => (
+                <Cell key={i} fill={gc(e.avg)} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      {hourly.length >= 3 && (
+        <div>
+          <p className="text-[10px] text-[#9ca3af] mb-1">By hour</p>
+          <div className="flex gap-1 flex-wrap">
+            {hourly.map(({ hour, avg }) => (
+              <div key={hour} className="flex flex-col items-center gap-0.5">
+                <div
+                  className="w-4 h-4 rounded-sm"
+                  style={{ backgroundColor: gc(avg) + "cc" }}
+                  title={`${hour}:00`}
+                />
+                <span className="text-[8px] text-[#9ca3af]">{hour}</span>
+              </div>
+            ))}
+          </div>
+          {worst && (
+            <p className="text-[10px] text-[#9ca3af] mt-1">
+              Worst hour:{" "}
+              <span className="text-red-400 font-medium">{worst.hour}:00</span>
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

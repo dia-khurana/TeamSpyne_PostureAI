@@ -73,5 +73,9 @@
     "vite": "catalog:",
     "wouter": "^3.3.5",
     "zod": "catalog:"
+  },
+  "dependencies": {
+    "@types/ws": "^8.18.1",
+    "ws": "^8.19.0"
   }
 }

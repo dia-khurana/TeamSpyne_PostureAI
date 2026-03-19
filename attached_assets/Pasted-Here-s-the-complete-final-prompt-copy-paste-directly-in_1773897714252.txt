@@ -1,0 +1,673 @@
+Here's the complete final prompt — copy paste directly into Replit Agent:
+
+---
+
+Read every file before writing any code: `public/cv.js`, `public/score.js`, `src/pages/Dashboard.tsx`, `src/components/ScoreRing.tsx`, `src/components/HistoryChart.tsx`, `src/index.css`, `src/App.tsx`, `index.html`. Do not write a single line until all files are read completely.
+
+Run this in shell first:
+```
+pnpm add -w ws @types/ws --ignore-scripts
+```
+
+---
+
+Replace `src/index.css` completely:
+
+```css
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+@import "tailwindcss";
+@theme inline {
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'Inter', monospace;
+  --color-background: 0 0% 98%;
+  --color-foreground: 220 13% 13%;
+  --color-card: 0 0% 100%;
+  --color-border: 220 13% 91%;
+  --color-muted: 220 13% 96%;
+  --color-muted-foreground: 220 9% 46%;
+  --color-primary: 221 83% 53%;
+  --color-destructive: 0 84% 60%;
+}
+@layer base {
+  body { @apply font-sans antialiased bg-[#f8f9fb] text-[#1a1d23]; }
+  * { @apply border-[#e8eaed]; }
+}
+@layer utilities {
+  @keyframes pulse-dot { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.5);opacity:0.5} }
+  .dot-pulse { animation: pulse-dot 1.4s ease-in-out infinite; }
+  @keyframes grow { from{width:0%} to{width:100%} }
+}
+.score-ring-container {
+  position:relative; width:140px; height:140px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--ring-gradient, conic-gradient(#3b82f6 100%,#e8eaed 0%));
+  box-shadow:0 2px 16px rgba(59,130,246,0.12); transition:all 0.5s ease-out;
+}
+.score-ring-inner {
+  width:104px; height:104px; border-radius:50%; background:#fff;
+  display:flex; align-items:center; justify-content:center; flex-direction:column;
+}
+```
+
+---
+
+Replace `src/components/ScoreRing.tsx` completely:
+
+```tsx
+import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
+interface Props { score:number; color:"green"|"yellow"|"red"; hasDetected?:boolean; }
+function getColors(c:"green"|"yellow"|"red"){
+  if(c==="red") return {hex:"#ef4444",tc:"text-red-500"};
+  if(c==="yellow") return {hex:"#f59e0b",tc:"text-amber-500"};
+  return {hex:"#3b82f6",tc:"text-blue-600"};
+}
+function getLabel(s:number){
+  if(s>=80) return {text:"Excellent",sub:"Keep it up!",c:"text-emerald-600"};
+  if(s>=60) return {text:"Good",sub:"Minor corrections",c:"text-blue-600"};
+  if(s>=40) return {text:"Fair",sub:"Time to readjust",c:"text-amber-500"};
+  return {text:"Poor",sub:"Take a break",c:"text-red-500"};
+}
+export function ScoreRing({score,color,hasDetected=false}:Props){
+  const [d,setD]=useState(score);
+  useEffect(()=>{setD(score);},[score]);
+  const {hex,tc}=getColors(color);
+  const label=getLabel(d);
+  return(
+    <div className="flex flex-col items-center gap-3">
+      <div className="score-ring-container" style={{"--ring-gradient":hasDetected?`conic-gradient(${hex} ${Math.max(0,Math.min(100,score))}%,#e8eaed 0%)`:`conic-gradient(#e8eaed 100%,#e8eaed 0%)`} as any}>
+        <div className="score-ring-inner">
+          <div className="text-[10px] text-[#9ca3af] uppercase tracking-wider mb-0.5">Score</div>
+          {hasDetected?<div className={cn("text-3xl font-semibold",tc)}>{d}</div>:<div className="text-2xl font-light text-[#d1d5db]">—</div>}
+        </div>
+      </div>
+      <div className="text-center">
+        {hasDetected?<><div className={cn("text-sm font-semibold",label.c)}>{label.text}</div><div className="text-[11px] text-[#9ca3af] mt-0.5">{label.sub}</div></>:<div className="text-xs text-[#9ca3af]">Waiting for detection...</div>}
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+Replace `src/components/HistoryChart.tsx` completely:
+
+```tsx
+import {Bar,BarChart,ResponsiveContainer,Tooltip,XAxis,YAxis,Cell} from "recharts";
+import {format} from "date-fns";
+import type {Session} from "@workspace/api-client-react";
+import {useMemo} from "react";
+interface Props{data:Session[];}
+export function HistoryChart({data}:Props){
+  const gc=(s:number)=>s>=80?"#10b981":s>=50?"#f59e0b":"#ef4444";
+  const chartData=useMemo(()=>[...data].sort((a,b)=>new Date(a.createdAt).getTime()-new Date(b.createdAt).getTime()).slice(-7).map(s=>({...s,displayDate:s.createdAt&&!isNaN(new Date(s.createdAt).getTime())?format(new Date(s.createdAt),"MMM d"):(s as any).timestamp&&!isNaN(new Date((s as any).timestamp).getTime())?format(new Date((s as any).timestamp),"MMM d"):"—"})),[data]);
+  const hourly=useMemo(()=>{const h:Record<number,number[]>={};data.forEach(s=>{const d=new Date(s.createdAt||(s as any).timestamp);if(!isNaN(d.getTime())){const hr=d.getHours();if(!h[hr])h[hr]=[];h[hr].push(s.avg);}});return Object.entries(h).map(([hr,sc])=>({hour:parseInt(hr),avg:Math.round(sc.reduce((a,b)=>a+b,0)/sc.length)})).sort((a,b)=>a.hour-b.hour);},[data]);
+  const worst=hourly.length>0?hourly.reduce((w,h)=>h.avg<w.avg?h:w,hourly[0]):null;
+  if(!data.length) return <div className="text-center py-4"><p className="text-xs text-[#9ca3af]">No sessions yet</p><p className="text-[10px] text-[#9ca3af] mt-1">Auto-saves every 60 seconds</p></div>;
+  return(
+    <div className="space-y-3">
+      <div className="h-[130px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={chartData} margin={{top:4,right:0,left:-28,bottom:0}}>
+            <XAxis dataKey="displayDate" stroke="#d1d5db" fontSize={9} tickLine={false} axisLine={false}/>
+            <YAxis stroke="#d1d5db" fontSize={9} tickLine={false} axisLine={false} domain={[0,100]}/>
+            <Tooltip cursor={{fill:"#f3f4f6"}} content={({active,payload})=>{if(!active||!payload?.length)return null;const d=payload[0].payload;return <div className="bg-white border border-[#e8eaed] rounded-lg p-2 shadow-sm text-xs"><p className="text-[#6b7280] mb-1">{d.displayDate}</p><div className="flex gap-2"><span>Avg <strong style={{color:gc(d.avg)}}>{d.avg}</strong></span><span className="text-red-400">Min {d.min}</span><span className="text-emerald-500">Max {d.max}</span></div></div>;}}/>
+            <Bar dataKey="avg" radius={[3,3,0,0]}>{chartData.map((e,i)=><Cell key={i} fill={gc(e.avg)}/>)}</Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      {hourly.length>=3&&<div><p className="text-[10px] text-[#9ca3af] mb-1">By hour</p><div className="flex gap-1 flex-wrap">{hourly.map(({hour,avg})=><div key={hour} className="flex flex-col items-center gap-0.5"><div className="w-4 h-4 rounded-sm" style={{backgroundColor:gc(avg)+"cc"}} title={`${hour}:00`}/><span className="text-[8px] text-[#9ca3af]">{hour}</span></div>)}</div>{worst&&<p className="text-[10px] text-[#9ca3af] mt-1">Worst: <span className="text-red-400 font-medium">{worst.hour}:00</span></p>}</div>}
+    </div>
+  );
+}
+```
+
+---
+
+Replace `src/pages/Dashboard.tsx` completely:
+
+```tsx
+import {useEffect,useState,useRef,useCallback,useMemo} from "react";
+import {useSessions,useCreateSession} from "@/hooks/use-sessions";
+import {ScoreRing} from "@/components/ScoreRing";
+import {HistoryChart} from "@/components/HistoryChart";
+import {Activity,Volume2,VolumeX,Smartphone,ChevronDown,ChevronUp,AlertCircle,CheckCircle,Clock,Target} from "lucide-react";
+import {cn} from "@/lib/utils";
+
+function getFixTip(s:string):string{
+  const t=s.toLowerCase();
+  if(t.includes("forward")||t.includes("chin")) return "Pull head back — ears above shoulders";
+  if(t.includes("neck")||t.includes("tilt")) return "Level head — imagine a book on top";
+  if(t.includes("shoulder")) return "Relax both shoulders down and back";
+  if(t.includes("spine")||t.includes("torso")||t.includes("straight")) return "Sit tall from hips, light core engagement";
+  return "Adjust position and take a slow breath";
+}
+function getBreakTip(m:{neck:number;shoulder:number;spine:number}):string{
+  if(m.neck>20) return "Neck break — tuck chin, look 6m away 20 seconds";
+  if(m.shoulder>10) return "Roll shoulders back 5 times slowly";
+  if(m.spine>10) return "Stand up, hands on hips, arch back 10 seconds";
+  return "Stand up and walk for 2 minutes";
+}
+function fmt(s:number){return `${Math.floor(s/60).toString().padStart(2,"0")}:${(s%60).toString().padStart(2,"0")}`;}
+function ms(v:number,w:number,b:number){if(v<w)return{c:"#10b981",l:"Good"};if(v<b)return{c:"#f59e0b",l:"Watch"};return{c:"#ef4444",l:"Fix now"};}
+
+export default function Dashboard(){
+  const {data:sessions=[],isLoading}=useSessions();
+  const {mutate:saveSession}=useCreateSession();
+  const [displayScore,setDisplayScore]=useState(100);
+  const [color,setColor]=useState<"green"|"yellow"|"red">("green");
+  const [statusText,setStatusText]=useState("Waiting...");
+  const [camStatus,setCamStatus]=useState("INITIALIZING");
+  const [elapsed,setElapsed]=useState(0);
+  const [scoreHistory,setScoreHistory]=useState<number[]>([]);
+  const [metrics,setMetrics]=useState({neck:0,shoulder:0,spine:0});
+  const [hasDetected,setHasDetected]=useState(false);
+  const [slouchSecs,setSlouchSecs]=useState(0);
+  const [mode,setMode]=useState<"relaxed"|"focus">(()=>(localStorage.getItem("postureai_mode") as any)||"relaxed");
+  const [isMuted,setIsMuted]=useState(()=>localStorage.getItem("postureai_sfx_muted")==="true");
+  const [showHistory,setShowHistory]=useState(false);
+  const [showWelcome,setShowWelcome]=useState(()=>!localStorage.getItem("postureai_welcomed"));
+  const [welcomeBack,setWelcomeBack]=useState("");
+  const [showBreak,setShowBreak]=useState(false);
+  const [showSummary,setShowSummary]=useState(false);
+  const [summary,setSummary]=useState<any>(null);
+  const [showPhone,setShowPhone]=useState(false);
+  const [showCal,setShowCal]=useState(false);
+  const [caling,setCaling]=useState(false);
+  const [sideCon,setSideCon]=useState(false);
+  const [fwdHead,setFwdHead]=useState(0);
+  const [lumbar,setLumbar]=useState(100);
+  const [viewMode,setViewMode]=useState<"front"|"side">("front");
+  const rollingRef=useRef<number[]>([]);
+  const slouchRef=useRef(0);
+  const noDetRef=useRef(0);
+  const awayRef=useRef(0);
+  const isAwayRef=useRef(false);
+  const bufRef=useRef<number[]>([]);
+  const sparkRef=useRef<HTMLCanvasElement>(null);
+  const lastBreakRef=useRef(0);
+  const sumDoneRef=useRef(false);
+
+  useEffect(()=>{
+    const canvas=sparkRef.current;
+    if(!canvas||scoreHistory.length===0)return;
+    const ctx=canvas.getContext("2d");if(!ctx)return;
+    const W=canvas.width,H=canvas.height;
+    ctx.clearRect(0,0,W,H);
+    const gap=3,bw=Math.max(4,Math.floor((W-gap*(scoreHistory.length-1))/scoreHistory.length));
+    scoreHistory.forEach((s,i)=>{
+      const bh=Math.max(3,Math.round((s/100)*(H-4)));
+      ctx.fillStyle=s>=80?"#10b981":s>=50?"#f59e0b":"#ef4444";
+      ctx.globalAlpha=0.85;ctx.beginPath();ctx.rect(i*(bw+gap),H-bh,bw,bh);ctx.fill();
+    });ctx.globalAlpha=1;
+  },[scoreHistory]);
+
+  useEffect(()=>{
+    if(hasDetected){const e=displayScore>=80?"🟢":displayScore>=60?"🟡":"🔴";document.title=`${e} ${displayScore} — PostureAI`;}
+    else document.title="PostureAI — Your posture coach";
+  },[displayScore,hasDetected]);
+
+  useEffect(()=>{
+    if(elapsed>0&&elapsed%2700===0&&elapsed!==lastBreakRef.current){lastBreakRef.current=elapsed;setShowBreak(true);}
+  },[elapsed]);
+
+  useEffect(()=>{
+    if(elapsed>=3600&&!sumDoneRef.current){sumDoneRef.current=true;genSummary();}
+  },[elapsed]);
+
+  function genSummary(){
+    const buf=bufRef.current;if(buf.length<10)return;
+    const gp=Math.round((buf.filter(s=>s>=70).length/buf.length)*100);
+    const avg=Math.round(buf.reduce((a,b)=>a+b,0)/buf.length);
+    const best=Math.max(...buf);
+    setSummary({duration:elapsed,gp,avg,best,tip:getFixTip(statusText)});
+    setShowSummary(true);
+  }
+
+  const yAvg=useMemo(()=>{
+    if(!sessions.length)return null;
+    const y=new Date();y.setDate(y.getDate()-1);
+    const ys=sessions.filter(s=>{const d=new Date(s.createdAt||(s as any).timestamp);return d.toDateString()===y.toDateString();});
+    if(!ys.length)return null;
+    return Math.round(ys.reduce((a,b)=>a+b.avg,0)/ys.length);
+  },[sessions]);
+
+  const toggleMute=useCallback(()=>{
+    setIsMuted(p=>{const n=!p;(window as any).setPostureAIMuted?.(n);localStorage.setItem("postureai_sfx_muted",String(n));return n;});
+  },[]);
+
+  useEffect(()=>{
+    if("Notification" in window&&Notification.permission==="default")Notification.requestPermission();
+    (window as any).initCV?.();
+    (window as any).initScore?.();
+    (window as any).setPostureAIMuted?.(localStorage.getItem("postureai_sfx_muted")==="true");
+
+    const onCam=(e:Event)=>setCamStatus((e as CustomEvent).detail);
+    const onTick=(e:Event)=>{
+      const d=(e as CustomEvent).detail;
+      setColor(d.color);setStatusText(d.status);setElapsed(d.elapsed??0);
+      if(Array.isArray(d.scoreHistory)&&d.scoreHistory.length>0)setScoreHistory([...d.scoreHistory]);
+      if(d.detected!==false&&d.composite>0){
+        setHasDetected(true);
+        rollingRef.current.push(d.composite);
+        if(rollingRef.current.length>300)rollingRef.current.shift();
+        setDisplayScore(Math.round(rollingRef.current.reduce((a:number,b:number)=>a+b,0)/rollingRef.current.length));
+      }
+      setMetrics({
+        neck:d.neckTilt||(window as any).postureCV?.neckAngle||0,
+        shoulder:d.shoulderAlign||(window as any).postureCV?.shoulderAngle||0,
+        spine:d.spineTilt||(window as any).postureCV?.spineAngle||0
+      });
+      if(d.forwardHeadDepth!==undefined)setFwdHead(d.forwardHeadDepth);
+      if(d.lumbarScore!==undefined)setLumbar(d.lumbarScore);
+      if(d.color==="red")slouchRef.current+=1;else slouchRef.current=0;
+      setSlouchSecs(slouchRef.current);
+      const noData=!d.detected||d.composite===0||d.status==="NO_POSE";
+      if(noData){
+        noDetRef.current++;
+        if(noDetRef.current>=30){isAwayRef.current=true;awayRef.current++;}
+      } else {
+        if(isAwayRef.current){
+          const m=Math.round(awayRef.current/60);
+          setWelcomeBack(`Welcome back! Away ${m>0?m+" min":"briefly"}.`);
+          setTimeout(()=>setWelcomeBack(""),5000);
+          slouchRef.current=0;
+        }
+        isAwayRef.current=false;noDetRef.current=0;awayRef.current=0;
+      }
+      bufRef.current.push(d.composite);
+      if(bufRef.current.length>=60){
+        const arr=bufRef.current;
+        saveSession({avg:Math.round(arr.reduce((a:number,b:number)=>a+b,0)/arr.length),min:Math.min(...arr),max:Math.max(...arr),duration:60,timestamp:Date.now()} as any);
+        bufRef.current=[];
+      }
+    };
+    const onSide=()=>setSideCon(true);
+    window.addEventListener("posture-camera-status",onCam);
+    window.addEventListener("posture-tick",onTick);
+    window.addEventListener("posture-side-connected",onSide);
+    window.addEventListener("beforeunload",genSummary);
+    return()=>{
+      window.removeEventListener("posture-camera-status",onCam);
+      window.removeEventListener("posture-tick",onTick);
+      window.removeEventListener("posture-side-connected",onSide);
+      window.removeEventListener("beforeunload",genSummary);
+    };
+  },[saveSession]);
+
+  const isTracking=camStatus==="ACTIVE"||camStatus==="TRACKING";
+  const threshold=mode==="relaxed"?480:120;
+  const shouldAlert=slouchSecs>=threshold&&hasDetected;
+  const phoneUrl=`${window.location.protocol}//${window.location.hostname}:${window.location.port}/mobile`;
+
+  return(
+    <div className="min-h-screen bg-[#f8f9fb]">
+
+      <nav className="bg-white border-b border-[#e8eaed] px-6 py-3 flex items-center justify-between sticky top-0 z-40 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center"><Activity size={16} className="text-white"/></div>
+          <span className="font-semibold text-[#1a1d23] text-sm">PostureAI</span>
+          <span className="text-[#9ca3af] text-xs hidden md:inline">Your personal posture coach</span>
+          <div className="hidden lg:flex items-center gap-1 text-[10px] text-[#9ca3af] bg-[#f3f4f6] px-2 py-1 rounded-full">
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400"/>No video stored
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {elapsed>0&&<div className="flex items-center gap-1.5 text-xs text-[#6b7280] bg-[#f3f4f6] px-3 py-1.5 rounded-full"><Clock size={12}/>{fmt(elapsed)}</div>}
+          <button onClick={()=>{const n=mode==="relaxed"?"focus":"relaxed";setMode(n);localStorage.setItem("postureai_mode",n);slouchRef.current=0;}} className={cn("text-xs font-medium px-3 py-1.5 rounded-full border transition-all",mode==="focus"?"bg-amber-50 border-amber-200 text-amber-700":"bg-[#f3f4f6] border-[#e8eaed] text-[#6b7280] hover:border-blue-200 hover:text-blue-600")}>{mode==="focus"?"Focus mode":"Relaxed mode"}</button>
+          <button onClick={toggleMute} className="p-2 rounded-full hover:bg-[#f3f4f6] text-[#6b7280]">{isMuted?<VolumeX size={16}/>:<Volume2 size={16}/>}</button>
+          <button onClick={()=>setShowPhone(true)} className="flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full bg-blue-600 text-white hover:bg-blue-700 transition-colors"><Smartphone size={13}/><span className="hidden sm:inline">Side camera</span></button>
+          <div className="flex items-center gap-1.5 text-xs text-[#6b7280]">
+            <div className={cn("w-2 h-2 rounded-full",isTracking&&"dot-pulse")} style={{backgroundColor:isTracking?"#10b981":"#d1d5db"}}/>
+            <span className="hidden sm:inline">{isTracking?"Tracking":"Starting..."}</span>
+          </div>
+        </div>
+      </nav>
+
+      {showWelcome&&<div className="bg-blue-50 border-b border-blue-100 px-6 py-3 flex items-center justify-between"><p className="text-sm text-blue-800">Sit so your full upper body is visible. You will only be nudged after several minutes of continuous bad posture. We never store video ever.</p><button onClick={()=>{localStorage.setItem("postureai_welcomed","true");setShowWelcome(false);}} className="text-xs text-blue-600 font-medium ml-4 whitespace-nowrap">Got it</button></div>}
+      {welcomeBack&&<div className="bg-emerald-50 border-b border-emerald-100 px-6 py-2 text-sm text-emerald-700 text-center font-medium">{welcomeBack}</div>}
+      {showBreak&&<div className="bg-amber-50 border-b border-amber-100 px-6 py-2 flex items-center justify-between"><p className="text-sm text-amber-800 font-medium">45 min sitting — {getBreakTip(metrics)}</p><button onClick={()=>setShowBreak(false)} className="text-xs text-amber-600 ml-4 font-medium whitespace-nowrap">Done</button></div>}
+
+      <div className={cn("px-6 py-2.5 flex items-center gap-2 border-b text-sm font-medium transition-colors duration-500",shouldAlert?color==="red"?"bg-red-50 border-red-100 text-red-700":"bg-amber-50 border-amber-100 text-amber-700":"bg-emerald-50 border-emerald-100 text-emerald-700")}>
+        {shouldAlert?<AlertCircle size={15} className="flex-shrink-0"/>:<CheckCircle size={15} className="flex-shrink-0"/>}
+        <span>{shouldAlert?statusText:isTracking&&hasDetected?"Posture looks good":"Starting camera..."}</span>
+        {shouldAlert&&<span className="text-xs font-normal opacity-75 ml-1 hidden md:inline">— {getFixTip(statusText)}</span>}
+        {!shouldAlert&&color!=="green"&&hasDetected&&<span className="w-2 h-2 rounded-full bg-amber-400 dot-pulse ml-auto flex-shrink-0"/>}
+      </div>
+
+      <div className="flex" style={{height:"calc(100vh - 112px)"}}>
+        <div className="flex-1 relative bg-[#0d0d0d]">
+          <video id="webcam" autoPlay playsInline className="absolute inset-0 w-full h-full object-cover"/>
+          <canvas id="overlay" className="absolute inset-0 w-full h-full object-cover" style={{zIndex:10,pointerEvents:"none"}}/>
+          <div className="absolute top-4 left-4 z-20 flex gap-2">
+            {(["front","side"] as const).map(m=>(
+              <button key={m} onClick={()=>{setViewMode(m);(window as any).setViewMode?.(m);}} className="text-xs font-medium px-3 py-1.5 rounded-full border backdrop-blur-sm transition-all" style={{background:viewMode===m?"rgba(59,130,246,0.9)":"rgba(255,255,255,0.15)",borderColor:viewMode===m?"transparent":"rgba(255,255,255,0.3)",color:"#fff"}}>
+                {m==="front"?"Front":"Side"}
+              </button>
+            ))}
+          </div>
+          {!isTracking&&<div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/70"><div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center mb-4 animate-pulse"><Activity size={28} className="text-white"/></div><p className="text-white text-sm font-medium">Getting camera ready...</p><p className="text-white/50 text-xs mt-1">Allow camera access if prompted</p></div>}
+          {sideCon&&<div className="absolute bottom-4 left-4 z-20 bg-emerald-500 text-white text-xs font-medium px-3 py-1.5 rounded-full flex items-center gap-1.5"><div className="w-1.5 h-1.5 rounded-full bg-white dot-pulse"/>3D mode active</div>}
+        </div>
+
+        <div className="w-72 bg-white border-l border-[#e8eaed] flex flex-col overflow-y-auto flex-shrink-0">
+          <div className="p-5 border-b border-[#e8eaed] flex flex-col items-center">
+            <p className="text-[10px] font-medium text-[#9ca3af] uppercase tracking-wider mb-4">Your score</p>
+            <ScoreRing score={displayScore} color={color} hasDetected={hasDetected}/>
+            {yAvg!==null&&hasDetected&&<div className="text-xs text-center mt-2" style={{color:displayScore>yAvg?"#10b981":"#ef4444"}}>{displayScore>yAvg?"↑":"↓"} {Math.abs(displayScore-yAvg)} pts vs yesterday</div>}
+          </div>
+
+          <div className="p-4 border-b border-[#e8eaed]">
+            <p className="text-[10px] font-medium text-[#9ca3af] uppercase tracking-wider mb-3">Live readings</p>
+            <div className="space-y-1">
+              {[{label:"Neck tilt",val:metrics.neck,w:10,b:20},{label:"Shoulder align",val:metrics.shoulder,w:5,b:10},{label:"Spine tilt",val:metrics.spine,w:5,b:10}].map(({label,val,w,b})=>{
+                const {c,l}=ms(val,w,b);
+                return(
+                  <div key={label} className="flex items-center justify-between py-2 border-b border-[#f9fafb] last:border-0">
+                    <div><p className="text-xs font-medium text-[#374151]">{label}</p><p className="text-[10px] font-medium" style={{color:c}}>{l}</p></div>
+                    <div className="flex items-center gap-2"><div className="w-1.5 h-1.5 rounded-full" style={{backgroundColor:c}}/><span className="text-sm font-semibold text-[#1a1d23] tabular-nums">{val>0?`${val}°`:"--"}</span></div>
+                  </div>
+                );
+              })}
+              {sideCon&&<>
+                <div className="flex items-center justify-between py-2 border-b border-[#f9fafb]">
+                  <div><p className="text-xs font-medium text-[#374151]">Forward head</p><p className="text-[10px] font-medium" style={{color:fwdHead<10?"#10b981":fwdHead<25?"#f59e0b":"#ef4444"}}>{fwdHead<10?"Good":fwdHead<25?"Watch":"Fix now"}</p></div>
+                  <span className="text-sm font-semibold text-[#1a1d23]">{fwdHead}mm</span>
+                </div>
+                <div className="flex items-center justify-between py-2">
+                  <div><p className="text-xs font-medium text-[#374151]">Lumbar curve</p><p className="text-[10px] font-medium" style={{color:lumbar>=80?"#10b981":lumbar>=50?"#f59e0b":"#ef4444"}}>{lumbar>=80?"Good":lumbar>=50?"Watch":"Fix now"}</p></div>
+                  <span className="text-sm font-semibold text-[#1a1d23]">{lumbar}/100</span>
+                </div>
+              </>}
+            </div>
+            <button onClick={()=>setShowCal(true)} className="w-full text-xs font-medium text-blue-600 border border-blue-100 bg-blue-50 py-2 rounded-lg hover:bg-blue-100 transition-colors mt-3 flex items-center justify-center gap-1.5"><Target size={12}/>Calibrate my baseline</button>
+          </div>
+
+          <div className="px-4 py-3 border-b border-[#e8eaed] flex items-center justify-between">
+            <div><p className="text-[10px] text-[#9ca3af]">Alert after</p><p className="text-xs font-medium text-[#374151]">{mode==="relaxed"?"8 min":"2 min"} continuous slouch</p></div>
+            <div className="w-1.5 h-1.5 rounded-full" style={{backgroundColor:shouldAlert?"#ef4444":slouchSecs>0?"#f59e0b":"#10b981"}}/>
+          </div>
+
+          <div className="p-4 border-b border-[#e8eaed]">
+            <p className="text-[10px] font-medium text-[#9ca3af] uppercase tracking-wider mb-2">Score trend</p>
+            <canvas ref={sparkRef} width={224} height={44} className="w-full rounded" style={{background:"#f8f9fb"}}/>
+            {scoreHistory.length===0&&<p className="text-[10px] text-[#9ca3af] text-center mt-2">Waiting for detection...</p>}
+          </div>
+
+          <button onClick={()=>setShowHistory(v=>!v)} className="px-4 py-3 flex items-center justify-between hover:bg-[#f8f9fb] transition-colors border-b border-[#e8eaed]">
+            <span className="text-xs font-medium text-[#374151]">Session history</span>
+            {showHistory?<ChevronUp size={14} className="text-[#9ca3af]"/>:<ChevronDown size={14} className="text-[#9ca3af]"/>}
+          </button>
+          {showHistory&&<div className="p-4 border-b border-[#e8eaed]">{isLoading?<p className="text-xs text-[#9ca3af] text-center animate-pulse">Loading...</p>:<HistoryChart data={sessions}/></div>}
+
+          <div className="p-4 mt-auto">
+            <button onClick={genSummary} className="w-full text-xs font-medium text-[#6b7280] border border-[#e8eaed] py-2.5 rounded-lg hover:bg-[#f3f4f6] hover:border-[#d1d5db] transition-all">End session</button>
+          </div>
+        </div>
+      </div>
+
+      <div onClick={()=>window.scrollTo({top:0,behavior:"smooth"})} style={{position:"fixed",bottom:20,right:20,zIndex:9999,background:"white",borderRadius:50,padding:"8px 14px",boxShadow:"0 4px 20px rgba(0,0,0,0.12)",border:"1px solid #e8eaed",display:"flex",alignItems:"center",gap:8,fontSize:13,fontWeight:600,cursor:"pointer",userSelect:"none"}}>
+        <div className={shouldAlert?"dot-pulse":""} style={{width:8,height:8,borderRadius:"50%",backgroundColor:!hasDetected?"#d1d5db":displayScore>=80?"#10b981":displayScore>=60?"#f59e0b":"#ef4444"}}/>
+        <span style={{color:"#1a1d23"}}>{hasDetected?displayScore:"—"}</span>
+        <span style={{color:"#9ca3af",fontWeight:400,fontSize:11}}>PostureAI</span>
+      </div>
+
+      {showPhone&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={()=>setShowPhone(false)}><div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full" onClick={e=>e.stopPropagation()}><h3 className="font-semibold text-[#1a1d23] mb-1">Add side camera</h3><p className="text-xs text-[#6b7280] mb-4">Use your phone for 3D posture analysis.</p><div className="bg-[#f8f9fb] rounded-xl p-4 mb-4 flex flex-col items-center gap-2"><img src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(phoneUrl)}&color=1a1d23&bgcolor=f8f9fb`} alt="QR" width={160} height={160} className="rounded-lg"/><p className="text-xs text-[#6b7280]">Scan with phone camera</p></div><div className="space-y-2 text-xs text-[#374151] mb-4"><p className="flex gap-2"><span className="text-blue-600 font-bold">1</span>Same WiFi as laptop</p><p className="flex gap-2"><span className="text-blue-600 font-bold">2</span>Phone on table edge, rear camera facing your left side</p><p className="flex gap-2"><span className="text-blue-600 font-bold">3</span>Ear, shoulder, hip all visible</p></div><div className="flex gap-2"><button onClick={()=>navigator.clipboard.writeText(phoneUrl)} className="flex-1 text-xs border border-[#e8eaed] py-2 rounded-lg hover:bg-[#f3f4f6]">Copy URL</button><button onClick={()=>setShowPhone(false)} className="flex-1 text-xs bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 font-medium">Done</button></div></div></div>}
+
+      {showCal&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"><div className="bg-white rounded-2xl shadow-2xl p-6 max-w-xs w-full text-center"><h3 className="font-semibold text-[#1a1d23] mb-2">Calibrate your baseline</h3><p className="text-sm text-[#6b7280] mb-5">Sit straight, look at camera, press Start and hold 5 seconds.</p>{!caling?<><button onClick={()=>{setCaling(true);setTimeout(()=>{const cv=(window as any).postureCV;localStorage.setItem("postureai_baseline",JSON.stringify({neck:cv?.neckAngle||0,shoulder:cv?.shoulderAngle||0,spine:cv?.spineAngle||0}));setCaling(false);setShowCal(false);},5000);}} className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium text-sm hover:bg-blue-700">Start calibration</button><button onClick={()=>setShowCal(false)} className="mt-3 text-xs text-[#9ca3af] w-full">Cancel</button></>:<div className="flex flex-col items-center gap-3"><div className="w-12 h-12 rounded-full border-4 border-blue-600 border-t-transparent animate-spin"/><p className="text-sm text-[#374151] font-medium">Hold still...</p><div className="w-full bg-[#e8eaed] rounded-full h-1.5 overflow-hidden"><div className="bg-blue-600 h-1.5 rounded-full" style={{animation:"grow 5s linear forwards"}}/></div></div>}</div></div>}
+
+      {showSummary&&summary&&<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"><div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full"><h3 className="font-semibold text-[#1a1d23] mb-4">Session summary</h3><div className="space-y-3 mb-5"><div className="flex justify-between text-sm"><span className="text-[#6b7280]">Duration</span><span className="font-medium">{Math.floor(summary.duration/60)} min</span></div><div className="flex justify-between text-sm"><span className="text-[#6b7280]">Good posture</span><span className="font-medium text-emerald-600">{summary.gp}%</span></div><div className="flex justify-between text-sm"><span className="text-[#6b7280]">Average score</span><span className="font-medium">{summary.avg}</span></div><div className="flex justify-between text-sm"><span className="text-[#6b7280]">Best score</span><span className="font-medium text-blue-600">{summary.best}</span></div><div className="pt-3 border-t border-[#e8eaed]"><p className="text-xs text-[#6b7280] mb-1">Tip for next session:</p><p className="text-sm text-[#374151]">{summary.tip}</p></div></div><button onClick={()=>setShowSummary(false)} className="w-full bg-blue-600 text-white text-sm font-medium py-2.5 rounded-lg hover:bg-blue-700">Close</button></div></div>}
+    </div>
+  );
+}
+```
+
+---
+
+Edit `public/cv.js` — make only these specific changes, do not rewrite the whole file:
+
+**Change 1** — Find `_applyMirror` function, replace its entire body:
+```js
+function _applyMirror(video, canvas, isRear) {
+  video.style.transform = 'none';
+  canvas.style.transform = 'none';
+}
+```
+
+**Change 2** — Find `px` function inside `drawSkeleton`, replace it:
+```js
+function px(lm) { return { x: lm.x * W, y: lm.y * H }; }
+```
+
+**Change 3** — Find this block inside `pose.onResults`:
+```js
+if (_isMobile && _viewMode === 'side') {
+  drawPlacementGuide(ctx, canvas.width, canvas.height);
+}
+```
+Replace with:
+```js
+drawPlacementGuide(ctx, canvas.width, canvas.height);
+```
+
+**Change 4** — Find `const ctx = canvas.getContext('2d');` inside `initCV`, add immediately after:
+```js
+canvas.style.position='absolute';
+canvas.style.top='0';
+canvas.style.left='0';
+canvas.style.width='100%';
+canvas.style.height='100%';
+canvas.style.pointerEvents='none';
+syncCanvasSize();
+setTimeout(syncCanvasSize, 300);
+setTimeout(syncCanvasSize, 1000);
+```
+
+**Change 5** — Add this entire block near the bottom of `cv.js`, BEFORE `window.initCV`:
+```js
+window._sideLandmarks = null;
+window._sideConnected = false;
+
+window.initSideView = () => {
+  const ws = new WebSocket(`ws://${window.location.host}/signal`);
+  const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+  pc.ondatachannel = (e) => {
+    const dc = e.channel;
+    dc.onopen = () => {
+      window._sideConnected = true;
+      window.dispatchEvent(new CustomEvent('posture-side-connected'));
+    };
+    dc.onclose = () => { window._sideConnected = false; window._sideLandmarks = null; };
+    dc.onmessage = (msg) => {
+      try { const d = JSON.parse(msg.data); if (d.type === 'side-landmarks') window._sideLandmarks = d.landmarks; } catch(_) {}
+    };
+  };
+  pc.onicecandidate = (e) => {
+    if (e.candidate) ws.send(JSON.stringify({ type: 'candidate', candidate: e.candidate, from: 'laptop' }));
+  };
+  ws.onmessage = async (msg) => {
+    const d = JSON.parse(msg.data);
+    if (d.from === 'laptop') return;
+    if (d.type === 'offer') {
+      await pc.setRemoteDescription(new RTCSessionDescription(d.sdp));
+      const ans = await pc.createAnswer();
+      await pc.setLocalDescription(ans);
+      ws.send(JSON.stringify({ type: 'answer', sdp: ans, from: 'laptop' }));
+    } else if (d.type === 'candidate' && d.candidate) {
+      await pc.addIceCandidate(new RTCIceCandidate(d.candidate));
+    }
+  };
+};
+```
+
+**Change 6** — Find the very end of `window.initCV` function, just before its closing `};`, add:
+```js
+window.initSideView();
+```
+
+---
+
+Edit `public/score.js` — make only these specific changes, do not rewrite the whole file:
+
+**Change 1** — Find `const cv = window.postureCV;` followed by `if (!cv) return;` and replace with:
+```js
+const cv = window.postureCV;
+if (!cv) return;
+const hasDetection = cv.neckAngle > 0 || cv.shoulderAngle > 0 || cv.spineAngle > 0;
+if (!hasDetection) {
+  window.dispatchEvent(new CustomEvent('posture-tick', {
+    detail: { composite:0, neck:0, shoulder:0, spine:0, status:'NO_POSE', color:'green', neckTilt:0, shoulderAlign:0, spineTilt:0, detected:false, elapsed:0, scoreHistory:[], forwardHeadDepth:0, lumbarScore:100 }
+  }));
+  return;
+}
+```
+
+**Change 2** — Find where `composite` is calculated and add this block immediately after it, before the status/color logic:
+```js
+if (window._sideLandmarks && window._sideConnected) {
+  const sl = window._sideLandmarks;
+  const ear = sl[7], shoulder = sl[11], hip = sl[23];
+  if (ear && shoulder && hip) {
+    const fwdHead = Math.round(Math.abs(ear.x - shoulder.x) * 100);
+    const lumbarOffset = shoulder.x - hip.x;
+    const lumbarScore = Math.max(0, Math.round(lumbarOffset > 0.05 ? 100 : 100 + lumbarOffset * 200));
+    const sideScore = Math.round((100 - Math.min(fwdHead * 2, 50)) * 0.5 + lumbarScore * 0.5);
+    const blended = Math.round(composite * 0.8 + sideScore * 0.2);
+    window.postureScore.forwardHeadDepth = fwdHead;
+    window.postureScore.lumbarScore = lumbarScore;
+    window.postureScore.composite = blended;
+  }
+}
+```
+
+**Change 3** — Find the final `window.dispatchEvent(new CustomEvent('posture-tick'` call and replace its entire detail object with:
+```js
+{
+  ...window.postureScore,
+  elapsed,
+  scoreHistory: [..._scoreHistory],
+  neckTilt: cv.neckAngle || 0,
+  shoulderAlign: cv.shoulderAngle || 0,
+  spineTilt: cv.spineAngle || 0,
+  detected: true,
+  forwardHeadDepth: window.postureScore.forwardHeadDepth || 0,
+  lumbarScore: window.postureScore.lumbarScore || 100,
+}
+```
+
+**Change 4** — Find `_scoreHistory.push(composite)` and change the max length from 10 to 18:
+```js
+if (_scoreHistory.length > 18) _scoreHistory.shift();
+```
+
+---
+
+In `src/App.tsx` add at the top:
+```tsx
+import MobileCam from "@/pages/MobileCam";
+```
+Add inside Switch:
+```tsx
+<Route path="/mobile" component={MobileCam} />
+```
+
+---
+
+Create new file `src/pages/MobileCam.tsx`:
+
+```tsx
+import {useEffect,useRef,useState} from "react";
+export default function MobileCam(){
+  const vRef=useRef<HTMLVideoElement>(null),cRef=useRef<HTMLCanvasElement>(null);
+  const [status,setStatus]=useState("Starting rear camera...");
+  const [conn,setConn]=useState(false);
+  const dcRef=useRef<RTCDataChannel|null>(null);
+  useEffect(()=>{
+    const ws=new WebSocket(`ws://${window.location.host}/signal`);
+    const pc=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
+    const dc=pc.createDataChannel("landmarks");dcRef.current=dc;
+    dc.onopen=()=>{setConn(true);setStatus("Connected to laptop!");};
+    dc.onclose=()=>{setConn(false);setStatus("Disconnected — refresh to retry");};
+    pc.onicecandidate=e=>{if(e.candidate)ws.send(JSON.stringify({type:"candidate",candidate:e.candidate,from:"mobile"}));};
+    ws.onopen=async()=>{const o=await pc.createOffer();await pc.setLocalDescription(o);ws.send(JSON.stringify({type:"offer",sdp:o,from:"mobile"}));};
+    ws.onmessage=async msg=>{const d=JSON.parse(msg.data);if(d.from==="mobile")return;if(d.type==="answer")await pc.setRemoteDescription(new RTCSessionDescription(d.sdp));else if(d.type==="candidate"&&d.candidate)await pc.addIceCandidate(new RTCIceCandidate(d.candidate));};
+    navigator.mediaDevices.getUserMedia({video:{facingMode:{exact:"environment"},width:{ideal:640},height:{ideal:480}},audio:false})
+      .catch(()=>navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false}))
+      .then(stream=>{if(!vRef.current)return;vRef.current.srcObject=stream;setStatus("Camera ready — positioning...");startPose();})
+      .catch(()=>setStatus("Could not access rear camera"));
+    return()=>{ws.close();pc.close();};
+  },[]);
+  function startPose(){
+    const v=vRef.current!,c=cRef.current!,ctx=c.getContext("2d")!,win=window as any;
+    const pose=new win.Pose({locateFile:(f:string)=>`https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});
+    pose.setOptions({modelComplexity:0,smoothLandmarks:true,minDetectionConfidence:0.5,minTrackingConfidence:0.5});
+    pose.onResults((r:any)=>{
+      c.width=v.videoWidth||640;c.height=v.videoHeight||480;
+      ctx.clearRect(0,0,c.width,c.height);
+      if(!r.poseLandmarks){setStatus("No pose — adjust camera");return;}
+      setStatus(conn?"Connected — tracking":"Tracking — connecting...");
+      const lm=r.poseLandmarks,W=c.width,H=c.height;
+      ctx.strokeStyle="#7c3aed";ctx.lineWidth=3;
+      [[7,11],[8,12],[11,12],[11,23],[12,24],[23,24]].forEach(([a,b])=>{ctx.beginPath();ctx.moveTo(lm[a].x*W,lm[a].y*H);ctx.lineTo(lm[b].x*W,lm[b].y*H);ctx.stroke();});
+      const dc=dcRef.current;
+      if(dc&&dc.readyState==="open")dc.send(JSON.stringify({type:"side-landmarks",landmarks:lm,timestamp:Date.now()}));
+    });
+    new win.Camera(v,{onFrame:async()=>{await pose.send({image:v});},width:640,height:480}).start();
+  }
+  return(
+    <div style={{background:"#f8f9fb",minHeight:"100vh",fontFamily:"Inter,sans-serif",display:"flex",flexDirection:"column",alignItems:"center",padding:"24px 16px",gap:"16px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <div style={{width:32,height:32,background:"#2563eb",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center"}}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+        <div><div style={{fontWeight:600,fontSize:14,color:"#1a1d23"}}>PostureAI</div><div style={{fontSize:11,color:"#9ca3af"}}>Side camera mode</div></div>
+      </div>
+      <div style={{padding:"6px 16px",borderRadius:99,fontSize:12,fontWeight:500,background:conn?"#d1fae5":"#eff6ff",border:`1px solid ${conn?"#a7f3d0":"#bfdbfe"}`,color:conn?"#065f46":"#1d4ed8"}}>{status}</div>
+      <div style={{position:"relative",width:"100%",maxWidth:400,borderRadius:12,overflow:"hidden",border:"1px solid #e8eaed"}}>
+        <video ref={vRef} autoPlay playsInline style={{width:"100%",display:"block"}}/>
+        <canvas ref={cRef} style={{position:"absolute",top:0,left:0,width:"100%",height:"100%"}}/>
+      </div>
+      <div style={{maxWidth:400,width:"100%",background:"white",borderRadius:12,padding:16,border:"1px solid #e8eaed",fontSize:13,color:"#374151",lineHeight:2}}>
+        <p style={{fontWeight:600,color:"#1a1d23",marginBottom:8}}>Placement guide</p>
+        <p>→ Place phone upright on table edge</p>
+        <p>→ Rear camera facing your left side</p>
+        <p>→ Ear, shoulder and hip must be visible</p>
+        <p>→ Sit 60–90cm away from phone</p>
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+In `vite.config.ts` add this function before `export default defineConfig` and add `signalingPlugin()` to the plugins array:
+
+```ts
+function signalingPlugin() {
+  return {
+    name: "posture-signaling",
+    configureServer(server: any) {
+      try {
+        const { WebSocketServer } = require("ws");
+        const wss = new WebSocketServer({ noServer: true });
+        const clients = new Set<any>();
+        server.httpServer?.on("upgrade", (req: any, socket: any, head: any) => {
+          if (req.url === "/signal") {
+            wss.handleUpgrade(req, socket, head, (ws: any) => {
+              clients.add(ws);
+              ws.on("message", (msg: any) => { clients.forEach(c => { if(c!==ws&&c.readyState===1)c.send(msg); }); });
+              ws.on("close", () => clients.delete(ws));
+            });
+          }
+        });
+      } catch(e) { console.warn("[PostureAI] ws not found — side camera disabled"); }
+    },
+  };
+}
+```
+
+---
+
+Do not touch: `tsconfig.json`, `src/components/ui/`, `src/hooks/`, `src/lib/utils.ts`, `src/main.tsx`, `pnpm-lock.yaml`.
+
+After all changes verify: white UI loads, camera not mirrored, purple skeleton on body, score shows dash until first detection then real number, neck/shoulder/spine show real degrees with Good/Watch/Fix now labels, no alert fires for brief bad posture, floating score widget visible bottom-right always, tab title updates with emoji and score, side camera button shows QR modal, calibrate button works, break reminder fires after 45 min, end session shows summary modal, /mobile route opens phone side cam page.

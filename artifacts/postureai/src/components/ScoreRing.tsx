@@ -1,71 +1,59 @@
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
-interface ScoreRingProps {
+interface Props {
   score: number;
-  size?: number;
+  color: "green" | "yellow" | "red";
+  hasDetected?: boolean;
+}
+
+function getColors(c: "green" | "yellow" | "red") {
+  if (c === "red") return { hex: "#ef4444", tc: "text-red-500" };
+  if (c === "yellow") return { hex: "#f59e0b", tc: "text-amber-500" };
+  return { hex: "#3b82f6", tc: "text-blue-600" };
 }
 
 function getLabel(s: number) {
-  if (s >= 80) return { text: "EXCELLENT", sub: "Keep it up!" };
-  if (s >= 60) return { text: "GOOD", sub: "Minor corrections needed" };
-  if (s >= 40) return { text: "FAIR", sub: "Time to readjust" };
-  return { text: "POOR", sub: "Take a break and reset" };
+  if (s >= 80) return { text: "Excellent", sub: "Keep it up!", c: "text-emerald-600" };
+  if (s >= 60) return { text: "Good", sub: "Minor corrections", c: "text-blue-600" };
+  if (s >= 40) return { text: "Fair", sub: "Time to readjust", c: "text-amber-500" };
+  return { text: "Poor", sub: "Take a break", c: "text-red-500" };
 }
 
-export default function ScoreRing({ score, size = 160 }: ScoreRingProps) {
-  const displayedScore = Math.max(0, Math.min(100, Math.round(score)));
-  const radius = 54;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (displayedScore / 100) * circumference;
-
-  let ringColor = "#10b981";
-  let textClass = "text-[#10b981]";
-  if (displayedScore < 40) {
-    ringColor = "#ef4444";
-    textClass = "text-[#ef4444]";
-  } else if (displayedScore < 70) {
-    ringColor = "#f59e0b";
-    textClass = "text-[#f59e0b]";
-  }
-
-  const label = getLabel(displayedScore);
-
+export function ScoreRing({ score, color, hasDetected = false }: Props) {
+  const [d, setD] = useState(score);
+  useEffect(() => { setD(score); }, [score]);
+  const { hex, tc } = getColors(color);
+  const label = getLabel(d);
+  const pct = Math.max(0, Math.min(100, score));
   return (
-    <div className="flex flex-col items-center">
-      <div className="relative" style={{ width: size, height: size }}>
-        <svg width={size} height={size} className="rotate-[-90deg]">
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            stroke="#1e1e3a"
-            strokeWidth="10"
-          />
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            stroke={ringColor}
-            strokeWidth="10"
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            style={{ transition: "stroke-dashoffset 0.5s ease, stroke 0.5s ease" }}
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className={cn("text-3xl font-bold font-mono", textClass)}>
-            {displayedScore}
-          </span>
+    <div className="flex flex-col items-center gap-3">
+      <div
+        className="score-ring-container"
+        style={{
+          ["--ring-gradient" as any]: hasDetected
+            ? `conic-gradient(${hex} ${pct}%, #e8eaed 0%)`
+            : `conic-gradient(#e8eaed 100%, #e8eaed 0%)`,
+        }}
+      >
+        <div className="score-ring-inner">
+          <div className="text-[10px] text-[#9ca3af] uppercase tracking-wider mb-0.5">Score</div>
+          {hasDetected ? (
+            <div className={cn("text-3xl font-semibold", tc)}>{d}</div>
+          ) : (
+            <div className="text-2xl font-light text-[#d1d5db]">—</div>
+          )}
         </div>
       </div>
-      <div className={cn("text-xs font-bold tracking-widest mt-1", textClass)}>
-        {label.text}
-      </div>
-      <div className="text-[10px] text-[#6b7280] mt-1 text-center px-2">
-        {label.sub}
+      <div className="text-center">
+        {hasDetected ? (
+          <>
+            <div className={cn("text-sm font-semibold", label.c)}>{label.text}</div>
+            <div className="text-[11px] text-[#9ca3af] mt-0.5">{label.sub}</div>
+          </>
+        ) : (
+          <div className="text-xs text-[#9ca3af]">Waiting for detection...</div>
+        )}
       </div>
     </div>
   );
