@@ -1,0 +1,150 @@
+# ============================================================
+# POSTUREAI — REPLIT HACKATHON PROMPT
+# Copy-paste this entire prompt into Replit AI
+# ============================================================
+
+Build a full-stack web app called **PostureAI** — a real-time AI posture detection and monitoring system. 
+No login required. Works on any laptop with a webcam. Must be demo-ready in one shot.
+
+---
+
+## TECH STACK
+- **Frontend:** Vanilla HTML + CSS + JavaScript (single page, no framework)
+- **Backend:** Python Flask (REST API, session logging, history endpoint)
+- **AI/CV:** MediaPipe Pose via CDN (browser-side, no server inference needed)
+- **Storage:** Flask backend writes session data to a local JSON file (sessions.json)
+- **Free API:** Web Notifications API (built into browser, no key needed)
+
+---
+
+## PROJECT STRUCTURE
+
+```
+postureai/
+├── app.py              ← Flask backend
+├── sessions.json       ← auto-created, stores session history
+├── static/
+│   ├── cv.js           ← MediaPipe pose detection + angle math
+│   ├── score.js        ← scoring engine + alert system
+│   └── style.css       ← all styles
+└── templates/
+    └── index.html      ← single page UI
+```
+
+---
+
+## FEATURE 1 — LIVE POSTURE DETECTION (Frontend, cv.js)
+
+Load MediaPipe Pose from CDN:
+```html
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+```
+
+- Access webcam via `navigator.mediaDevices.getUserMedia`
+- Feed each frame into MediaPipe Pose (modelComplexity: 1)
+- Extract exactly 6 landmarks: LEFT_EAR(7), RIGHT_EAR(8), LEFT_SHOULDER(11), RIGHT_SHOULDER(12), LEFT_HIP(23), RIGHT_HIP(24)
+- Draw bone lines + white dots on a `<canvas>` overlaid on the video (both mirrored with `scaleX(-1)`)
+- Calculate 3 angles every frame:
+  - **Neck tilt** = `angleFromVertical(leftShoulder, leftEar)` → ideal < 10°, bad > 35°
+  - **Shoulder align** = `angleFromHorizontal(leftShoulder, rightShoulder)` → ideal < 5°, bad > 15°
+  - **Spine tilt** = `angleFromVertical(leftHip, leftShoulder)` → ideal < 8°, bad > 30°
+- Expose `window.postureCV = { neckAngle, shoulderAngle, spineAngle }` (updated every frame)
+
+---
+
+## FEATURE 2 — SCORING + ALERT SYSTEM (Frontend, score.js)
+
+Every 1000ms, read from `window.postureCV` and:
+
+1. Convert each angle to a 0–100 sub-score using linear interpolation:
+   - neck: 0°→100, 35°→0
+   - shoulder: 0°→100, 15°→0
+   - spine: 0°→30°→0
+2. Composite score = `(0.40 × neckScore) + (0.35 × shoulderScore) + (0.25 × spineScore)`
+3. Show a **circular score ring** (conic-gradient CSS, animated) with the number inside
+4. Show a **color-coded alert banner** below the ring:
+   - 🟢 Score 80–100 → green → "GOOD POSTURE"
+   - 🟡 Score 50–79 → yellow → "ADJUST YOUR POSTURE"
+   - 🔴 Score 0–49 → red → "SIT UP — POOR POSTURE"
+5. Fire a **Web Notification** if red persists for 5+ continuous seconds (debounced)
+6. Every 60 seconds, POST session data to Flask backend:
+```js
+fetch('/api/session', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ avg, min, max, duration, timestamp: Date.now() })
+});
+```
+
+---
+
+## FEATURE 3 — SESSION HISTORY PANEL (Flask Backend + Frontend)
+
+**Flask (app.py):**
+```python
+from flask import Flask, request, jsonify, render_template
+import json, os
+from datetime import datetime
+
+app = Flask(__name__)
+SESSIONS_FILE = 'sessions.json'
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/api/session', methods=['POST'])
+def save_session():
+    data = request.json
+    sessions = []
+    if os.path.exists(SESSIONS_FILE):
+        with open(SESSIONS_FILE) as f:
+            sessions = json.load(f)
+    sessions.append(data)
+    sessions = sessions[-50:]  # keep last 50
+    with open(SESSIONS_FILE, 'w') as f:
+        json.dump(sessions, f)
+    return jsonify({ 'status': 'saved' })
+
+@app.route('/api/sessions', methods=['GET'])
+def get_sessions():
+    if not os.path.exists(SESSIONS_FILE):
+        return jsonify([])
+    with open(SESSIONS_FILE) as f:
+        return jsonify(json.load(f))
+
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
+```
+
+**Frontend history panel:**
+- On page load, call `GET /api/sessions` and render the last 7 sessions as a simple bar chart (use Chart.js from CDN)
+- Each bar = session avg score, colored green/yellow/red based on value
+- Show date + avg score below each bar
+- Panel sits below the alert banner, collapsible with a "▼ Session History" toggle button
+
+---
+
+## UI DESIGN REQUIREMENTS
+
+Dark theme throughout:
+- Background: `#0f0f0f` | Cards: `#1a1a1a` | Borders: `#2e2e2e`
+- Accent green: `#c8f060` | Good: `#5de0a0` | Bad: `#ff6b5b` | Warn: `#f0c040`
+- Font: monospace everywhere
+- Layout: centered column, max-width 680px, all cards have `border-radius: 8px`
+- The webcam + canvas overlay must be `640×480px`, both elements `position: absolute` stacked
+- Score ring: 120px circle using `conic-gradient`, with inner circle for the number
+- Everything must look clean and impressive for a live demo on a projector
+
+---
+
+## CONSTRAINTS
+- NO authentication, NO database, NO paid APIs
+- Must run with just: `pip install flask` then `python app.py`
+- Webcam requires localhost or HTTPS — Flask dev server on localhost is fine
+- Keep all JS in separate files (cv.js and score.js), not inline in HTML
+- Chart.js via CDN: `https://cdn.jsdelivr.net/npm/chart.js`
+
+Start by creating app.py, then templates/index.html, then static/cv.js, then static/score.js, then static/style.css.

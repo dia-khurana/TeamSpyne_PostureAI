@@ -1,0 +1,472 @@
+Here's your complete Replit Agent prompt — copy-paste this entire thing:
+
+---
+
+I need you to fix every issue in this PostureAI app. Read all files first before making any changes. Here is everything that needs to be fixed, in priority order:
+
+---
+
+**PHILOSOPHY — read this first:**
+
+This app should stop judging users every second. Nobody sits perfectly for 6-7 hours. The goal is "recover faster" not "sit perfectly." Only alert after 4+ minutes of continuous bad posture. One bad second = ignore completely.
+
+---
+
+**FIX 0 — MOST URGENT — Remove mirror flip:**
+
+In `src/pages/Dashboard.tsx`, find the `<video>` and `<canvas>` elements. Both have `scale-x-[-1]` in their className. Remove it from both. The camera must show real orientation — right hand appears on right side of screen.
+
+Also open `public/cv.js` and check if there is any `scale(-1, 1)` or `ctx.transform(-1, 0, 0, 1, width, 0)` or any canvas flip transform. If yes, remove it. The pose skeleton drawn on the canvas overlay must also not be mirrored.
+
+---
+
+**FIX 1 — Slouch duration tracking (most important UX fix):**
+
+In `src/pages/Dashboard.tsx`:
+
+Add these state variables:
+```tsx
+const [slouchSeconds, setSlouchSeconds] = useState(0);
+const [mode, setMode] = useState<"relaxed"|"focus">(() => 
+  (localStorage.getItem("postureai_mode") as any) || "relaxed"
+);
+const slouchRef = useRef(0);
+const lastColorRef = useRef("green");
+```
+
+In the `handleTick` function, after updating color:
+```tsx
+if (d.color === "red") {
+  slouchRef.current += 1;
+} else {
+  slouchRef.current = 0;
+}
+setSlouchSeconds(slouchRef.current);
+lastColorRef.current = d.color;
+```
+
+The alert threshold:
+- relaxed mode: alert when `slouchRef.current >= 480` (8 minutes)
+- focus mode: alert when `slouchRef.current >= 120` (2 minutes)
+
+Only show the red alert banner when threshold is crossed. Below threshold — show nothing, or a tiny amber dot only.
+
+---
+
+**FIX 2 — Relaxed vs Focus mode toggle:**
+
+In the header in `src/pages/Dashboard.tsx`, add a toggle button next to the mute button:
+
+```tsx
+<button
+  onClick={() => {
+    const next = mode === "relaxed" ? "focus" : "relaxed";
+    setMode(next);
+    localStorage.setItem("postureai_mode", next);
+  }}
+  className="flex items-center gap-2 text-xs font-bold tracking-widest border border-[#2a2a4a] bg-[#111128] text-[#6b7280] px-3 py-2 hover:border-[#7c3aed55] hover:text-[#a855f7] transition-colors"
+>
+  {mode === "relaxed" ? "RELAXED MODE" : "FOCUS MODE"}
+</button>
+```
+
+---
+
+**FIX 3 — Rolling 5-minute average score:**
+
+In `src/pages/Dashboard.tsx`:
+
+Add a rolling score buffer:
+```tsx
+const rollingScoreRef = useRef<number[]>([]);
+const [displayScore, setDisplayScore] = useState(100);
+```
+
+In `handleTick`:
+```tsx
+rollingScoreRef.current.push(d.composite);
+if (rollingScoreRef.current.length > 300) {
+  rollingScoreRef.current.shift();
+}
+const avg = Math.round(
+  rollingScoreRef.current.reduce((a, b) => a + b, 0) / rollingScoreRef.current.length
+);
+setDisplayScore(avg);
+```
+
+Pass `displayScore` to `<ScoreRing>` instead of `score`.
+
+---
+
+**FIX 4 — Score label with human meaning:**
+
+In `src/components/ScoreRing.tsx`, after the score number add:
+
+```tsx
+const getLabel = (s: number) => {
+  if (s >= 80) return { text: "EXCELLENT", sub: "Keep it up!" };
+  if (s >= 60) return { text: "GOOD", sub: "Minor corrections needed" };
+  if (s >= 40) return { text: "FAIR", sub: "Time to readjust" };
+  return { text: "POOR", sub: "Take a break and reset" };
+};
+const label = getLabel(displayedScore);
+```
+
+Render below the score number:
+```tsx
+<div className={cn("text-xs font-bold tracking-widest mt-1", textClass)}>
+  {label.text}
+</div>
+<div className="text-[10px] text-[#6b7280] mt-1 text-center px-2">
+  {label.sub}
+</div>
+```
+
+---
+
+**FIX 5 — Humanise alert banner with fix tips:**
+
+In `src/pages/Dashboard.tsx`, create this function before the return:
+
+```tsx
+function getFixTip(statusText: string): string {
+  const s = statusText.toLowerCase();
+  if (s.includes("forward") || s.includes("chin")) 
+    return "Pull your head back gently — ears should be directly above your shoulders";
+  if (s.includes("neck") || s.includes("tilt"))
+    return "Level your head — imagine balancing a book on top of it";
+  if (s.includes("shoulder"))
+    return "Relax both shoulders down and back equally";
+  if (s.includes("spine") || s.includes("back"))
+    return "Sit tall from your hips, not your shoulders. Light core engagement helps.";
+  if (s.includes("good") || s.includes("excellent"))
+    return "Great posture! Keep your screen at eye level and stay relaxed.";
+  return "Adjust your position and take a slow breath.";
+}
+```
+
+In the alert banner JSX, below the status text add:
+```tsx
+<p className="text-xs opacity-75 mt-1 font-normal normal-case tracking-normal">
+  {getFixTip(statusText)}
+</p>
+```
+
+Only show the alert banner when `slouchSeconds >= threshold` (from FIX 1). Below threshold show a calm green "Posture looks good" banner always.
+
+---
+
+**FIX 6 — Away detection:**
+
+In `src/pages/Dashboard.tsx`:
+
+```tsx
+const [isAway, setIsAway] = useState(false);
+const [awaySeconds, setAwaySeconds] = useState(0);
+const awayRef = useRef(0);
+const noDetectionRef = useRef(0);
+```
+
+In `handleTick`, add:
+```tsx
+if (d.composite === 0 || d.status === "NO_POSE" || !d.detected) {
+  noDetectionRef.current += 1;
+  if (noDetectionRef.current >= 30) {
+    setIsAway(true);
+    awayRef.current += 1;
+    setAwaySeconds(awayRef.current);
+  }
+} else {
+  if (isAway) {
+    // Show welcome back banner
+    const minsAway = Math.round(awayRef.current / 60);
+    setWelcomeBack(`Welcome back! You were away ${minsAway > 0 ? minsAway + " min" : "a moment"}.`);
+    setTimeout(() => setWelcomeBack(""), 5000);
+    slouchRef.current = 0;
+  }
+  setIsAway(false);
+  noDetectionRef.current = 0;
+  awayRef.current = 0;
+}
+```
+
+Add state:
+```tsx
+const [welcomeBack, setWelcomeBack] = useState("");
+```
+
+Show the welcome back banner at top of dashboard when `welcomeBack` is not empty:
+```tsx
+{welcomeBack && (
+  <div className="w-full bg-[#10b98115] border border-[#10b981] text-[#10b981] px-4 py-2 text-sm font-bold tracking-wide text-center">
+    {welcomeBack}
+  </div>
+)}
+```
+
+---
+
+**FIX 7 — Session summary modal:**
+
+In `src/pages/Dashboard.tsx`, add state:
+```tsx
+const [showSummary, setShowSummary] = useState(false);
+const [summary, setSummary] = useState<{
+  duration: number;
+  goodPercent: number;
+  worstIssue: string;
+  tip: string;
+  bestScore: number;
+} | null>(null);
+```
+
+Create a `generateSummary` function:
+```tsx
+function generateSummary() {
+  const buf = scoreBuffer.current;
+  if (buf.length < 10) return;
+  const goodCount = buf.filter(s => s >= 70).length;
+  const goodPercent = Math.round((goodCount / buf.length) * 100);
+  const avgScore = Math.round(buf.reduce((a,b) => a+b, 0) / buf.length);
+  setSummary({
+    duration: sessionElapsed,
+    goodPercent,
+    worstIssue: statusText,
+    tip: getFixTip(statusText),
+    bestScore: Math.max(...buf),
+  });
+  setShowSummary(true);
+}
+```
+
+Call `generateSummary()` after 60 minutes (`sessionElapsed >= 3600`) — check this in a useEffect watching `sessionElapsed`.
+
+Also add `window.addEventListener("beforeunload", generateSummary)` in the main useEffect.
+
+Render the summary modal:
+```tsx
+{showSummary && summary && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-4" 
+    style={{background: "#0a0a1aee"}}>
+    <div className="font-mono text-white p-8 max-w-sm w-full"
+      style={{background: "#111128", border: "1px solid #7c3aed", borderRadius: "12px"}}>
+      <p className="text-[#a855f7] font-bold tracking-widest text-sm mb-4">SESSION COMPLETE</p>
+      <div className="space-y-3 text-sm mb-6">
+        <p>Time tracked: <span className="text-[#a855f7] font-bold">{Math.floor(summary.duration/60)} min</span></p>
+        <p>Good posture: <span className="text-[#10b981] font-bold">{summary.goodPercent}% of session</span></p>
+        <p>Best score: <span className="text-[#a855f7] font-bold">{summary.bestScore}</span></p>
+        <p className="text-[#f59e0b]">Main issue: {summary.worstIssue}</p>
+        <p className="text-[#6b7280] text-xs mt-2">Tip for next session: {summary.tip}</p>
+      </div>
+      <button onClick={() => setShowSummary(false)}
+        className="w-full border border-[#7c3aed55] py-2 text-[#7c3aed] text-xs tracking-widest hover:bg-[#7c3aed22] transition-colors">
+        CLOSE
+      </button>
+    </div>
+  </div>
+)}
+```
+
+---
+
+**FIX 8 — Fix history timestamps:**
+
+In `src/components/HistoryChart.tsx`, replace the `displayDate` line with:
+```tsx
+displayDate: session.createdAt 
+  ? format(new Date(session.createdAt), "MMM dd HH:mm")
+  : (session as any).timestamp 
+    ? format(new Date((session as any).timestamp), "MMM dd HH:mm")
+    : "No date",
+```
+
+---
+
+**FIX 9 — Metric colour dots + labels:**
+
+In `src/pages/Dashboard.tsx`, replace the three metric boxes with this pattern:
+
+```tsx
+{[
+  { 
+    id: "neck-val", label: "NECK TILT",
+    thresholds: [10, 20],
+    unit: "°"
+  },
+  { 
+    id: "shoulder-val", label: "SHOULDER ALIGN",
+    thresholds: [5, 10],
+    unit: "°"
+  },
+  { 
+    id: "spine-val", label: "SPINE TILT",
+    thresholds: [5, 10],
+    unit: "°"
+  },
+].map(({ id, label, thresholds, unit }) => {
+  const val = parseFloat((document.getElementById(id)?.textContent || "0"));
+  const dotColor = val < thresholds[0] ? "#10b981" : val < thresholds[1] ? "#f59e0b" : "#ef4444";
+  const statusLabel = val < thresholds[0] ? "normal" : val < thresholds[1] ? "watch" : "correct now";
+  return (
+    <div key={id} className="bg-background border border-border p-3 flex justify-between items-center">
+      <div>
+        <span className="text-xs text-[#6b7280] tracking-widest">{label}</span>
+        <div className="text-[10px] mt-1" style={{color: dotColor}}>{statusLabel}</div>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="w-2 h-2 rounded-full" style={{backgroundColor: dotColor}}/>
+        <div className="text-lg font-bold text-[#a855f7]">
+          <span id={id}>--</span>
+          <span className="text-xs text-[#4b5563] ml-1">{unit}</span>
+        </div>
+      </div>
+    </div>
+  );
+})}
+```
+
+Note: since the DOM values are set by `cv.js` directly, also track metric values in React state. Add:
+```tsx
+const [metrics, setMetrics] = useState({neck: 0, shoulder: 0, spine: 0});
+```
+
+In `handleTick`:
+```tsx
+setMetrics({
+  neck: d.neckTilt ?? 0,
+  shoulder: d.shoulderAlign ?? 0,
+  spine: d.spineTilt ?? 0,
+});
+```
+
+Use `metrics.neck`, `metrics.shoulder`, `metrics.spine` instead of reading from DOM.
+
+---
+
+**FIX 10 — First time welcome banner:**
+
+At the very top of the Dashboard return, before the header:
+
+```tsx
+const [showWelcome, setShowWelcome] = useState(
+  () => !localStorage.getItem("postureai_welcomed")
+);
+
+{showWelcome && (
+  <div className="w-full bg-[#7c3aed15] border border-[#7c3aed55] px-5 py-4 flex items-start justify-between gap-4 rounded">
+    <div>
+      <p className="text-[#a855f7] font-bold text-sm mb-1">Welcome to PostureAI</p>
+      <p className="text-[#a0a0c0] text-xs leading-relaxed">
+        Sit so your full upper body is visible in the camera. Keep your screen at eye level. 
+        We track quietly — you'll only be nudged if you've been slouching for several minutes continuously. 
+        We never record video. Ever.
+      </p>
+    </div>
+    <button
+      onClick={() => {
+        localStorage.setItem("postureai_welcomed", "true");
+        setShowWelcome(false);
+      }}
+      className="text-xs border border-[#7c3aed55] px-3 py-1 text-[#7c3aed] hover:bg-[#7c3aed22] transition-colors whitespace-nowrap flex-shrink-0"
+    >
+      Got it
+    </button>
+  </div>
+)}
+```
+
+---
+
+**FIX 11 — Rename all UI labels:**
+
+Find and replace these exact strings throughout all files:
+
+| Old | New |
+|-----|-----|
+| `SYS.OPTICS` | `CAMERA FEED` |
+| `SYS.DIAGNOSTICS` | `YOUR SCORE` |
+| `SYS.LIVE_READINGS` | `LIVE READINGS` |
+| `SYS.HISTORY_LOG` | `SESSION HISTORY` |
+| `AWAITING FEED...` | `Starting camera...` |
+| `Initializing Optics...` | `Getting camera ready...` |
+| `FETCHING RECORDS...` | `Loading history...` |
+| `Live Biometric Tracking System` | `Your personal posture coach` |
+
+---
+
+**FIX 12 — Open on Phone / QR fix:**
+
+In `src/pages/Dashboard.tsx`, replace the QR modal content. The QR code using `window.location.href` will show `localhost:3000` which is useless on a phone.
+
+Replace with:
+```tsx
+<p className="text-[#a855f7] font-bold tracking-widest text-sm mb-4">Open on Your Phone</p>
+<div className="text-xs text-left space-y-3 text-[#a0a0c0] mb-5 w-full">
+  <p className="text-[#10b981] font-bold">Make sure your phone is on the same WiFi as this laptop.</p>
+  <p><span className="text-[#7c3aed] font-bold">Step 1</span> — On Windows: open Command Prompt, type <span className="text-white font-mono">ipconfig</span>, find your IPv4 address (looks like 192.168.x.x)</p>
+  <p><span className="text-[#7c3aed] font-bold">Step 2</span> — On your phone browser, go to: <span className="text-white font-mono">YOUR_IP:3000</span></p>
+  <p><span className="text-[#7c3aed] font-bold">Step 3</span> — Allow camera permission on phone</p>
+  <p><span className="text-[#7c3aed] font-bold">Step 4</span> — Tap VIEW: SIDE on your phone, place it on your table edge facing your left side</p>
+</div>
+<button
+  onClick={() => {
+    const url = window.location.href.replace("localhost", "YOUR_LAPTOP_IP");
+    navigator.clipboard.writeText(url);
+  }}
+  className="w-full border border-[#7c3aed55] py-2 text-[#7c3aed] text-xs tracking-widest hover:bg-[#7c3aed22] transition-colors mb-3"
+>
+  COPY URL TEMPLATE
+</button>
+```
+
+---
+
+**FIX 13 — Break reminder:**
+
+Add a break reminder that triggers after 45 continuous minutes of tracking:
+
+```tsx
+const [showBreakReminder, setShowBreakReminder] = useState(false);
+
+useEffect(() => {
+  if (sessionElapsed > 0 && sessionElapsed % 2700 === 0) {
+    setShowBreakReminder(true);
+  }
+}, [sessionElapsed]);
+```
+
+Show as a dismissable top banner:
+```tsx
+{showBreakReminder && (
+  <div className="w-full bg-[#f59e0b15] border border-[#f59e0b] px-5 py-3 flex items-center justify-between">
+    <p className="text-[#f59e0b] text-sm font-bold">
+      You've been sitting for 45 minutes. Stand up, stretch, and walk for 2 minutes.
+    </p>
+    <button onClick={() => setShowBreakReminder(false)} 
+      className="text-[#f59e0b] text-xs border border-[#f59e0b55] px-3 py-1 hover:bg-[#f59e0b22] transition-colors ml-4 flex-shrink-0">
+      Done
+    </button>
+  </div>
+)}
+```
+
+---
+
+**FIX 14 — Check score.js and cv.js for what data they emit:**
+
+Open `public/score.js` and `public/cv.js`. Find the `posture-tick` CustomEvent dispatch. Check what fields are in `detail`. Make sure `neckTilt`, `shoulderAlign`, `spineTilt`, `detected` are included in the event detail. If they are named differently (like `neck`, `shoulder`, `spine`), update the `handleTick` in Dashboard.tsx to use the correct field names.
+
+---
+
+**FINAL CHECKS after all fixes:**
+
+1. Run the app and verify camera is NOT mirrored
+2. Sit in bad posture for 30 seconds — confirm NO red alert appears
+3. Sit in bad posture for the threshold time — confirm alert appears with fix tip
+4. Stand up and walk away for 30 seconds — confirm welcome back banner appears
+5. Check score ring shows label (EXCELLENT/GOOD/FAIR/POOR) below the number
+6. Check metric boxes show coloured dots and normal/watch/correct now labels
+7. Check history chart shows real dates not "Unknown" or "No date"
+8. Confirm welcome banner appears on first load and disappears after "Got it"
+
+**DO NOT change the core MediaPipe pose detection logic. Only change UI, state management, and event handling.**

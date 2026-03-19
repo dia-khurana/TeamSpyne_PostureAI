@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PostureAI — CV Dev</title>
+
+  <!-- MediaPipe via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0f0f0f;
+      color: #e8e6df;
+      font-family: monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px;
+      gap: 20px;
+    }
+
+    h1 { font-size: 16px; color: #c8f060; letter-spacing: 0.1em; }
+
+    /* Video + canvas stacked on top of each other */
+    .camera-wrap {
+      position: relative;
+      width: 640px;
+      height: 480px;
+      border: 1px solid #2e2e2e;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #1a1a1a;
+    }
+
+    #webcam, #overlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 640px;
+      height: 480px;
+    }
+
+    /* Flip the video so it feels like a mirror */
+    #webcam  { transform: scaleX(-1); }
+    #overlay { transform: scaleX(-1); }
+
+    /* Live angle readout panel */
+    .readout {
+      display: flex;
+      gap: 16px;
+    }
+
+    .angle-card {
+      background: #1a1a1a;
+      border: 1px solid #2e2e2e;
+      border-radius: 8px;
+      padding: 14px 20px;
+      min-width: 160px;
+      text-align: center;
+    }
+
+    .angle-card .label {
+      font-size: 10px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 6px;
+    }
+
+    .angle-card .value {
+      font-size: 28px;
+      font-weight: 500;
+      color: #c8f060;
+    }
+
+    .angle-card .unit {
+      font-size: 12px;
+      color: #555;
+      margin-left: 2px;
+    }
+
+    /* Status bar */
+    #status {
+      font-size: 12px;
+      color: #888;
+    }
+
+    #status.error { color: #ff6b5b; }
+    #status.ok    { color: #5de0a0; }
+  </style>
+</head>
+<body>
+
+  <h1>POSTUREAI — CV PIPELINE</h1>
+
+  <p id="status">Initialising...</p>
+
+  <!-- Camera feed with skeleton overlay on top -->
+  <div class="camera-wrap">
+    <video id="webcam" autoplay playsinline></video>
+    <canvas id="overlay" width="640" height="480"></canvas>
+  </div>
+
+  <!-- Live angle display -->
+  <div class="readout">
+    <div class="angle-card">
+      <div class="label">Neck tilt</div>
+      <div class="value" id="neck-val">--<span class="unit">°</span></div>
+    </div>
+    <div class="angle-card">
+      <div class="label">Shoulder align</div>
+      <div class="value" id="shoulder-val">--<span class="unit">°</span></div>
+    </div>
+    <div class="angle-card">
+      <div class="label">Spine tilt</div>
+      <div class="value" id="spine-val">--<span class="unit">°</span></div>
+    </div>
+  </div>
+
+  <script src="cv.js"></script>
+</body>
+</html>
